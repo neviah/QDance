@@ -13,13 +13,20 @@ vi.mock('./CodeBlock', () => ({
     language,
     variant,
     deferHighlight,
+    highlightDelayMs,
   }: {
     code: string
     language?: string
     variant?: string
     deferHighlight?: boolean
+    highlightDelayMs?: number
   }) => (
-    <div data-testid="code-block" data-variant={variant ?? 'default'} data-defer-highlight={String(!!deferHighlight)}>
+    <div
+      data-testid="code-block"
+      data-variant={variant ?? 'default'}
+      data-defer-highlight={String(!!deferHighlight)}
+      data-highlight-delay={String(highlightDelayMs ?? 0)}
+    >
       {`${language ?? 'text'}:${code}`}
     </div>
   ),
@@ -107,10 +114,18 @@ describe('MarkdownRenderer', () => {
     expect(block.dataset.variant).toBe('default')
   })
 
-  it('defers code block highlighting while content is streaming', () => {
+  it('debounces code block highlighting while content is streaming', () => {
     render(<MarkdownRenderer content={'```ts\nconst x = 1\n```'} isStreaming />)
 
-    expect(screen.getByTestId('code-block')).toHaveAttribute('data-defer-highlight', 'true')
+    expect(screen.getByTestId('code-block')).toHaveAttribute('data-defer-highlight', 'false')
+    expect(screen.getByTestId('code-block')).toHaveAttribute('data-highlight-delay', '48')
+  })
+
+  it('keeps the declared language for an incomplete streaming code fence', () => {
+    render(<MarkdownRenderer content={'```ts\nconst x = 1'} isStreaming />)
+
+    expect(screen.getByTestId('code-block')).toHaveTextContent('ts:const x = 1')
+    expect(screen.getByTestId('code-block')).toHaveAttribute('data-highlight-delay', '48')
   })
 
   it('reserves enough marker space for large ordered list numbers', () => {

@@ -21,6 +21,8 @@ interface CodeBlockProps {
   wordwrap?: boolean
   /** During streaming, keep code plain until the block settles to avoid highlight churn. */
   deferHighlight?: boolean
+  /** Debounce async highlighting while code is still changing. */
+  highlightDelayMs?: number
 }
 
 export const CodeBlock = memo(function CodeBlock({
@@ -32,6 +34,7 @@ export const CodeBlock = memo(function CodeBlock({
   maxHeight,
   wordwrap,
   deferHighlight = false,
+  highlightDelayMs = 0,
 }: CodeBlockProps) {
   const { codeWordWrap } = useSyncExternalStore(themeStore.subscribe, themeStore.getSnapshot)
   const isMobile = useIsMobile()
@@ -53,7 +56,13 @@ export const CodeBlock = memo(function CodeBlock({
     return language || 'text'
   }, [code, language])
 
-  const { output: highlightedHtml } = useSyntaxHighlight(code, { lang: effectiveLanguage, enabled: inView && !deferHighlight })
+  const shouldHighlight = !deferHighlight && (inView || highlightDelayMs > 0)
+
+  const { output: highlightedHtml } = useSyntaxHighlight(code, {
+    lang: effectiveLanguage,
+    enabled: shouldHighlight,
+    delayMs: highlightDelayMs,
+  })
   const html = deferHighlight ? null : highlightedHtml
 
   const containerStyle = maxHeight ? { ...style, maxHeight } : style
