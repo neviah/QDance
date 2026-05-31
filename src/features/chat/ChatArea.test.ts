@@ -6,7 +6,9 @@ import {
   buildTurnDurationMap,
   computeAnchorRestoreScrollDelta,
   computeExpandedPageRange,
+  computePremeasureMessageBudget,
   findPageToPremeasure,
+  findPagesToPremeasure,
   findMessageSequenceOffset,
   reconcileStableChatPages,
 } from './chatPageModel'
@@ -335,6 +337,49 @@ describe('findPageToPremeasure', () => {
         radius: 2,
       }),
     ).toBe(pages[1])
+  })
+
+  it('remeasures stale pages without dropping their cached heights', () => {
+    expect(
+      findPageToPremeasure({
+        pages,
+        expandedPageRange: { startIndex: 2, endIndex: 2 },
+        measuredPageHeights: { 'page-3': 130 },
+        stalePageKeys: new Set(['page-3']),
+        direction: 'older',
+        radius: 2,
+      }),
+    ).toBe(pages[3])
+  })
+
+  it('premeasures multiple small pages to satisfy the message budget', () => {
+    const smallPages = Array.from({ length: 8 }, (_, index) => ({
+      key: `small-page-${index}`,
+      rows: [],
+      messageIds: Array.from({ length: 5 }, (_unused, messageIndex) => `m${index}-${messageIndex}`),
+      estimatedHeight: 100,
+    }))
+
+    const planned = findPagesToPremeasure({
+      pages: smallPages,
+      expandedPageRange: { startIndex: 1, endIndex: 1 },
+      measuredPageHeights: {},
+      direction: 'older',
+      radius: 1,
+      messageBudget: 20,
+    })
+
+    expect(planned.map(page => page.key)).toEqual(['small-page-2', 'small-page-3', 'small-page-4', 'small-page-5'])
+  })
+})
+
+describe('computePremeasureMessageBudget', () => {
+  it('scales with viewport height within a bounded message budget', () => {
+    expect(computePremeasureMessageBudget(0)).toBe(20)
+    expect(computePremeasureMessageBudget(600)).toBe(20)
+    expect(computePremeasureMessageBudget(1200)).toBe(30)
+    expect(computePremeasureMessageBudget(2400)).toBe(60)
+    expect(computePremeasureMessageBudget(4000)).toBe(60)
   })
 })
 

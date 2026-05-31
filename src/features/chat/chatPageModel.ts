@@ -3,6 +3,10 @@ import type { Message } from '../../types/message'
 export const PAGE_MESSAGE_COUNT = 20
 export const EXPANDED_PAGE_RADIUS = 0
 export const PREMEASURE_PAGE_RADIUS = 1
+export const PREMEASURE_MIN_MESSAGE_BUDGET = 20
+export const PREMEASURE_MAX_MESSAGE_BUDGET = 60
+const PREMEASURE_TARGET_VIEWPORTS = 2
+const ESTIMATED_PREMEASURE_MESSAGE_HEIGHT = 80
 
 export interface MessageGroupRow {
   key: string
@@ -292,39 +296,94 @@ export function buildExpandedPageSelection(
 
 export type PagePremeasureDirection = 'older' | 'newer' | 'idle'
 
+export function computePremeasureMessageBudget(viewportHeight: number): number {
+  if (viewportHeight <= 0) return PREMEASURE_MIN_MESSAGE_BUDGET
+  const viewportSizedBudget = Math.ceil((viewportHeight * PREMEASURE_TARGET_VIEWPORTS) / ESTIMATED_PREMEASURE_MESSAGE_HEIGHT)
+  return Math.max(PREMEASURE_MIN_MESSAGE_BUDGET, Math.min(PREMEASURE_MAX_MESSAGE_BUDGET, viewportSizedBudget))
+}
+
 export function findPageToPremeasure(options: {
   pages: StableChatPage[]
   expandedPageRange: PageRange
   measuredPageHeights: Record<string, number>
+  stalePageKeys?: ReadonlySet<string>
   direction: PagePremeasureDirection
   radius?: number
 }): StableChatPage | null {
-  const { pages, expandedPageRange, measuredPageHeights, direction } = options
+  return findPagesToPremeasure(options)[0] ?? null
+}
+
+export function findPagesToPremeasure(options: {
+  pages: StableChatPage[]
+  expandedPageRange: PageRange
+  measuredPageHeights: Record<string, number>
+  stalePageKeys?: ReadonlySet<string>
+  direction: PagePremeasureDirection
+  radius?: number
+  messageBudget?: number
+  maxPages?: number
+}): StableChatPage[] {
+  const {
+    pages,
+    expandedPageRange,
+    measuredPageHeights,
+    stalePageKeys = new Set<string>(),
+    direction,
+    messageBudget = PREMEASURE_MIN_MESSAGE_BUDGET,
+    maxPages = Math.max(1, Math.ceil(messageBudget)),
+  } = options
   const radius = options.radius ?? PREMEASURE_PAGE_RADIUS
-  if (pages.length === 0 || expandedPageRange.endIndex < expandedPageRange.startIndex) return null
+  if (pages.length === 0 || expandedPageRange.endIndex < expandedPageRange.startIndex) return []
 
-  const startIndex = Math.max(0, expandedPageRange.startIndex - radius)
-  const endIndex = Math.min(pages.length - 1, expandedPageRange.endIndex + radius)
+  const premeasurePageBudget = Math.max(radius, maxPages)
+  const minIndex = Math.max(0, expandedPageRange.startIndex - premeasurePageBudget)
+  const maxIndex = Math.min(pages.length - 1, expandedPageRange.endIndex + premeasurePageBudget)
 
-  const findNewer = () => {
-    for (let index = Math.max(0, expandedPageRange.startIndex - 1); index >= startIndex; index--) {
+  const collectNewer = (limitMessages: number, limitPages: number) => {
+    const result: StableChatPage[] = []
+    let coveredMessages = 0
+    for (
+      let index = Math.max(0, expandedPageRange.startIndex - 1);
+      index >= minIndex && coveredMessages < limitMessages && result.length < limitPages;
+      index--
+    ) {
       const page = pages[index]
-      if (measuredPageHeights[page.key] == null) return page
+      coveredMessages += Math.max(1, page.messageIds.length)
+      if (measuredPageHeights[page.key] == null || stalePageKeys.has(page.key)) result.push(page)
     }
-    return null
+    return { pages: result, coveredMessages }
   }
 
-  const findOlder = () => {
-    for (let index = expandedPageRange.endIndex + 1; index <= endIndex; index++) {
+  const collectOlder = (limitMessages: number, limitPages: number) => {
+    const result: StableChatPage[] = []
+    let coveredMessages = 0
+    for (
+      let index = expandedPageRange.endIndex + 1;
+      index <= maxIndex && coveredMessages < limitMessages && result.length < limitPages;
+      index++
+    ) {
       const page = pages[index]
-      if (measuredPageHeights[page.key] == null) return page
+      coveredMessages += Math.max(1, page.messageIds.length)
+      if (measuredPageHeights[page.key] == null || stalePageKeys.has(page.key)) result.push(page)
     }
-    return null
+    return { pages: result, coveredMessages }
   }
 
-  if (direction === 'older') return findOlder() ?? findNewer()
-  if (direction === 'newer') return findNewer() ?? findOlder()
-  return findOlder() ?? findNewer()
+  const combine = (
+    primary: (limitMessages: number, limitPages: number) => { pages: StableChatPage[]; coveredMessages: number },
+    fallback: (limitMessages: number, limitPages: number) => { pages: StableChatPage[]; coveredMessages: number },
+  ) => {
+    const planned = primary(messageBudget, maxPages)
+    if (planned.coveredMessages >= messageBudget || planned.pages.length >= maxPages) return planned.pages
+
+    const remainingMessages = messageBudget - planned.coveredMessages
+    const remainingPages = maxPages - planned.pages.length
+    return [...planned.pages, ...fallback(remainingMessages, remainingPages).pages]
+  }
+
+  if (direction === 'older') return combine(collectOlder, collectNewer)
+  if (direction === 'newer') return combine(collectNewer, collectOlder)
+  return combine(collectOlder, collectNewer)
 }
 
 export function buildPageRenderSegments(options: {
