@@ -174,6 +174,8 @@ describe('MarkdownRenderer', () => {
 
     const diagram = await screen.findByRole('img', { name: 'Mermaid diagram' })
 
+    expect(screen.queryByRole('button', { name: 'Enable diagram pan' })).not.toBeInTheDocument()
+
     fireEvent.click(screen.getByRole('button', { name: 'Zoom in diagram' }))
     expect(diagram).toHaveStyle({ transform: 'translate(0px, 0px) scale(1.15)' })
 
@@ -184,6 +186,24 @@ describe('MarkdownRenderer', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Reset diagram view' }))
     expect(diagram).toHaveStyle({ transform: 'translate(0px, 0px) scale(1)' })
+  })
+
+  it('keeps desktop controls for hover-capable touch input', async () => {
+    useInputCapabilitiesMock.mockReturnValue({
+      canHover: true,
+      hasCoarsePointer: false,
+      hasTouch: true,
+      preferTouchUi: false,
+    })
+
+    render(<MarkdownRenderer content={'```mermaid\ngraph TD\n  A-->B\n```'} />)
+
+    const diagram = await screen.findByRole('img', { name: 'Mermaid diagram' })
+
+    expect(screen.queryByRole('button', { name: 'Enable diagram pan' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Zoom in diagram' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Zoom out diagram' })).toBeInTheDocument()
+    expect(diagram.className).toContain('touch-pan-y')
   })
 
   it('uses tap-to-reveal mermaid controls for touch-preferred input', async () => {

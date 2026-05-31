@@ -353,22 +353,22 @@ const MarkdownMermaid = memo(function MarkdownMermaid({ code, isIncomplete }: Cu
 
   const handleContainerClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
-      if (!supportsTouchGestures) return
+      if (!preferTouchUi) return
       if (event.target instanceof HTMLElement && event.target.closest('button')) return
-      event.currentTarget.focus()
+      event.currentTarget.focus({ preventScroll: true })
     },
-    [supportsTouchGestures],
+    [preferTouchUi],
   )
 
   const handleContainerBlur = useCallback(
     (event: React.FocusEvent<HTMLDivElement>) => {
-      if (!supportsTouchGestures) return
+      if (!preferTouchUi) return
       const nextTarget = event.relatedTarget
       if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return
       setIsTouchPanEnabled(false)
       clearTouchGesture()
     },
-    [clearTouchGesture, supportsTouchGestures],
+    [clearTouchGesture, preferTouchUi],
   )
 
   useEffect(() => {
@@ -512,16 +512,17 @@ const MarkdownMermaid = memo(function MarkdownMermaid({ code, isIncomplete }: Cu
 
   return (
     <div
-      className={`group/mermaid relative my-4 first:mt-0 last:mb-0 overflow-hidden ${supportsTouchGestures ? 'focus:outline-none' : ''}`}
-      tabIndex={supportsTouchGestures ? 0 : undefined}
-      onClick={supportsTouchGestures ? handleContainerClick : undefined}
-      onBlur={supportsTouchGestures ? handleContainerBlur : undefined}
+      className={`group/mermaid relative my-4 first:mt-0 last:mb-0 overflow-hidden ${preferTouchUi ? 'focus:outline-none' : ''}`}
+      tabIndex={preferTouchUi ? 0 : undefined}
+      onClick={preferTouchUi ? handleContainerClick : undefined}
+      onBlur={preferTouchUi ? handleContainerBlur : undefined}
     >
       <div
         className={`absolute right-2 top-2 z-10 flex items-center gap-1 opacity-0 transition-opacity group-hover/mermaid:opacity-100 group-focus-within/mermaid:opacity-100 ${preferTouchUi ? '[@media(hover:none)]:opacity-0' : '[@media(hover:none)]:opacity-100'}`}
+        onMouseDown={event => event.preventDefault()}
       >
         <CopyButton text={code} position="static" className={`!h-8 !w-8 !p-2 ${MERMAID_CONTROL_BUTTON_BASE_CLASS}`} />
-        {supportsTouchGestures && (
+        {preferTouchUi && (
           <button
             type="button"
             className={`${MERMAID_CONTROL_BUTTON_CLASS} ${isTouchPanEnabled ? 'ring-1 ring-accent-main-100/60 !text-accent-main-100' : ''}`}
