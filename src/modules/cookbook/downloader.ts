@@ -13,6 +13,9 @@ export interface DownloadControlOptions {
   signal?: AbortSignal
 }
 
+const browserPartialChunks = new Map<string, Uint8Array[]>()
+const browserPartialBytes = new Map<string, number>()
+
 function getAbortReason(signal?: AbortSignal): 'paused' | 'cancelled' | null {
   if (!signal?.aborted) return null
   const reason = String(signal.reason ?? '').toLowerCase()
@@ -58,8 +61,10 @@ async function downloadViaTauri(
 ): Promise<ModelDownloadState> {
   try {
     const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http')
-    const { writeFile, mkdir } = await import('@tauri-apps/plugin-fs')
+    const { writeFile, mkdir, exists, stat, remove, rename } = await import('@tauri-apps/plugin-fs')
     throwIfAborted(options?.signal)
+
+    const tempPath = `${request.destinationPath}.part`
 
     // Ensure destination directory exists
     const dir = request.destinationPath.substring(0, Math.max(request.destinationPath.lastIndexOf('/'), request.destinationPath.lastIndexOf('\\')))
@@ -67,15 +72,36 @@ async function downloadViaTauri(
       try { await mkdir(dir, { recursive: true }) } catch { /* already exists */ }
     }
 
-    const response = await tauriFetch(request.sourceUri, { method: 'GET' })
+    let resumeFrom = 0
+    if (await exists(tempPath)) {
+      const info = await stat(tempPath)
+      if (typeof info.size === 'number' && info.size > 0) {
+        resumeFrom = info.size
+      }
+    }
+
+    let response = await tauriFetch(request.sourceUri, {
+      method: 'GET',
+      headers: resumeFrom > 0 ? { Range: `bytes=${resumeFrom}-` } : undefined,
+    })
+
+    if (resumeFrom > 0 && response.status !== 206) {
+      await remove(tempPath).catch(() => {})
+      resumeFrom = 0
+      response = await tauriFetch(request.sourceUri, { method: 'GET' })
+    }
+
     if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
 
     const totalStr = response.headers.get('content-length')
-    const total = totalStr ? parseInt(totalStr, 10) : undefined
+    const currentTotal = totalStr ? parseInt(totalStr, 10) : undefined
+    const total = currentTotal !== undefined ? resumeFrom + currentTotal : undefined
     state.totalBytes = total
 
-    const chunks: Uint8Array[] = []
-    let downloaded = 0
+    let downloaded = resumeFrom
+    state.downloadedBytes = downloaded
+    state.progress = total ? Math.round((downloaded / total) * 100) : 0
+    onProgress?.({ ...state })
 
     if (response.body) {
       const reader = response.body.getReader()
@@ -84,7 +110,7 @@ async function downloadViaTauri(
         const { done, value } = await reader.read()
         if (done) break
         if (value) {
-          chunks.push(value)
+          await writeFile(tempPath, value, { append: downloaded > 0, create: true })
           downloaded += value.byteLength
           state.downloadedBytes = downloaded
           state.progress = total ? Math.round((downloaded / total) * 100) : 0
@@ -93,19 +119,12 @@ async function downloadViaTauri(
       }
     } else {
       const buf = await response.arrayBuffer()
-      chunks.push(new Uint8Array(buf))
-      downloaded = buf.byteLength
+      const chunk = new Uint8Array(buf)
+      await writeFile(tempPath, chunk, { append: downloaded > 0, create: true })
+      downloaded += chunk.byteLength
     }
 
-    // Assemble and write
-    const full = new Uint8Array(downloaded)
-    let offset = 0
-    for (const chunk of chunks) {
-      full.set(chunk, offset)
-      offset += chunk.byteLength
-    }
-
-    await writeFile(request.destinationPath, full)
+    await rename(tempPath, request.destinationPath)
 
     state.status = 'ready'
     state.progress = 100
@@ -120,6 +139,9 @@ async function downloadViaTauri(
     } else if (message === '__DOWNLOAD_CANCELLED__') {
       state.status = 'cancelled'
       state.errorMessage = undefined
+      const tempPath = `${request.destinationPath}.part`
+      const { remove } = await import('@tauri-apps/plugin-fs')
+      await remove(tempPath).catch(() => {})
     } else {
       state.status = 'failed'
       state.errorMessage = message
@@ -141,15 +163,34 @@ async function downloadViaBrowser(
 ): Promise<ModelDownloadState> {
   try {
     throwIfAborted(options?.signal)
-    const response = await fetch(request.sourceUri, { signal: options?.signal })
+
+    const partialChunks = browserPartialChunks.get(request.modelId) ?? []
+    const partialBytes = browserPartialBytes.get(request.modelId) ?? 0
+    const chunks = [...partialChunks]
+
+    let response = await fetch(request.sourceUri, {
+      signal: options?.signal,
+      headers: partialBytes > 0 ? { Range: `bytes=${partialBytes}-` } : undefined,
+    })
+
+    if (partialBytes > 0 && response.status !== 206) {
+      chunks.length = 0
+      browserPartialChunks.delete(request.modelId)
+      browserPartialBytes.delete(request.modelId)
+      response = await fetch(request.sourceUri, { signal: options?.signal })
+    }
+
     if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
 
     const totalStr = response.headers.get('content-length')
-    const total = totalStr ? parseInt(totalStr, 10) : undefined
+    const currentTotal = totalStr ? parseInt(totalStr, 10) : undefined
+    const total = currentTotal !== undefined ? partialBytes + currentTotal : undefined
     state.totalBytes = total
 
-    const chunks: Uint8Array[] = []
-    let downloaded = 0
+    let downloaded = partialBytes
+    state.downloadedBytes = downloaded
+    state.progress = total ? Math.round((downloaded / total) * 100) : 0
+    onProgress?.({ ...state })
 
     if (response.body) {
       const reader = response.body.getReader()
@@ -160,6 +201,8 @@ async function downloadViaBrowser(
         if (value) {
           chunks.push(value)
           downloaded += value.byteLength
+          browserPartialChunks.set(request.modelId, chunks)
+          browserPartialBytes.set(request.modelId, downloaded)
           state.downloadedBytes = downloaded
           state.progress = total ? Math.round((downloaded / total) * 100) : 0
           onProgress?.({ ...state })
@@ -168,7 +211,9 @@ async function downloadViaBrowser(
     } else {
       const buf = await response.arrayBuffer()
       chunks.push(new Uint8Array(buf))
-      downloaded = buf.byteLength
+      downloaded += buf.byteLength
+      browserPartialChunks.set(request.modelId, chunks)
+      browserPartialBytes.set(request.modelId, downloaded)
     }
 
     // In browser mode we trigger a browser download since we can't write to disk
@@ -196,6 +241,8 @@ async function downloadViaBrowser(
     state.status = 'ready'
     state.progress = 100
     state.downloadedBytes = downloaded
+    browserPartialChunks.delete(request.modelId)
+    browserPartialBytes.delete(request.modelId)
     onProgress?.(state)
     return state
   } catch (err) {
@@ -206,6 +253,8 @@ async function downloadViaBrowser(
     } else if (message === '__DOWNLOAD_CANCELLED__' || message.includes('The operation was aborted')) {
       state.status = 'cancelled'
       state.errorMessage = undefined
+      browserPartialChunks.delete(request.modelId)
+      browserPartialBytes.delete(request.modelId)
     } else {
       state.status = 'failed'
       state.errorMessage = message

@@ -3,7 +3,29 @@ import { describe, expect, it, vi } from 'vitest'
 
 const startScanMock = vi.fn()
 const retryDownloadMock = vi.fn()
-const mockState = {
+const mockState: {
+  scanStatus: 'idle' | 'scanning' | 'done' | 'failed'
+  scanError: string | undefined
+  scan: unknown
+  recommendation: {
+    family: string
+    modelId: string
+    quantization: string
+    source: 'local' | 'cloud'
+    reasoning: string
+  } | undefined
+  downloads: Array<{
+    modelId: string
+    sourceUri: string
+    destinationPath: string
+    status: 'queued' | 'downloading' | 'paused' | 'cancelled' | 'ready' | 'failed'
+    progress: number
+    downloadedBytes?: number
+    totalBytes?: number
+    errorMessage?: string
+  }>
+  registeredModels: unknown[]
+} = {
   scanStatus: 'idle',
   scanError: undefined,
   scan: undefined,

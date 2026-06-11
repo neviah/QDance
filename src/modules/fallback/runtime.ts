@@ -4,8 +4,10 @@ import { fallbackEngineStore } from './fallbackStore'
 
 type FallbackReason = 'error' | 'rate_limit' | 'timeout'
 
-function classifyFailureReason(error: unknown): FallbackReason {
+function classifyFailureReason(error: unknown): FallbackReason | null {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+  if (message.includes('aborted') || message.includes('cancelled') || message.includes('canceled')) return null
+  if (message.includes('401') || message.includes('403') || message.includes('unauthorized') || message.includes('forbidden')) return 'error'
   if (message.includes('429') || message.includes('rate') || message.includes('quota')) return 'rate_limit'
   if (message.includes('timeout') || message.includes('timed out') || message.includes('deadline')) return 'timeout'
   return 'error'
@@ -63,6 +65,12 @@ export async function sendMessageAsyncWithFallback(
       lastError = error
       const reason = classifyFailureReason(error)
       const message = error instanceof Error ? error.message : String(error)
+
+      // User/system cancellation should not trigger provider failover.
+      if (!reason) {
+        throw error instanceof Error ? error : new Error(message)
+      }
+
       const resolution = fallbackEngineStore.recordFailure(providerID, reason, message)
 
       if (!resolution) {
