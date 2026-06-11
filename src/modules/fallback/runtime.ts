@@ -29,7 +29,7 @@ function syncFallbackChain(activeModelId: string) {
       priority: provider.priority,
     }))
 
-  fallbackEngineStore.syncFromProviders(providers, activeModelId)
+  fallbackEngineStore.syncFromProviders(providers, activeModelId, false)
 }
 
 export async function sendMessageAsyncWithFallback(
@@ -38,7 +38,8 @@ export async function sendMessageAsyncWithFallback(
 ): Promise<{ providerID: string; modelID: string }> {
   syncFallbackChain(params.model.modelID)
 
-  let providerID = params.model.providerID
+  const activeEndpoint = fallbackEngineStore.getActiveEndpoint()
+  let providerID = activeEndpoint?.id ?? params.model.providerID
   let modelID = resolveModelForProvider(providerID, params.model.modelID)
   const attemptedProviderIds = new Set<string>()
   let lastError: unknown

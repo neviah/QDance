@@ -43,7 +43,7 @@ export interface ModelDownloadRequest {
 }
 
 export interface ModelDownloadState extends ModelDownloadRequest {
-  status: 'queued' | 'downloading' | 'ready' | 'failed'
+  status: 'queued' | 'downloading' | 'paused' | 'cancelled' | 'ready' | 'failed'
   progress: number
   downloadedBytes?: number
   totalBytes?: number

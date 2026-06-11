@@ -9,15 +9,24 @@ import type { FallbackChainState, FallbackEvent, FallbackResolution, ProviderEnd
 
 const STORAGE_KEY = 'oca-fallback-v1'
 const MAX_EVENTS = 200
+const DEFAULT_COOLDOWN_MS = 30_000
 
 type Subscriber = () => void
 
 function loadState(): FallbackChainState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) return JSON.parse(raw) as FallbackChainState
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<FallbackChainState>
+      return {
+        activeEndpointId: parsed.activeEndpointId,
+        endpoints: parsed.endpoints ?? [],
+        events: parsed.events ?? [],
+        health: parsed.health ?? {},
+      }
+    }
   } catch { /* ignore */ }
-  return { endpoints: [], events: [] }
+  return { endpoints: [], events: [], health: {} }
 }
 
 class FallbackEngineStore {
@@ -29,6 +38,41 @@ class FallbackEngineStore {
   subscribe = (cb: Subscriber): (() => void) => {
     this.subscribers.add(cb)
     return () => this.subscribers.delete(cb)
+  }
+
+  private getEligibleEndpoints(): ProviderEndpoint[] {
+    const now = Date.now()
+    const healthy = this.state.endpoints
+      .filter(endpoint => endpoint.enabled)
+      .filter(endpoint => {
+        const health = this.state.health[endpoint.id]
+        if (!health?.cooldownUntil) return true
+        return new Date(health.cooldownUntil).getTime() <= now
+      })
+      .sort((a, b) => a.priority - b.priority)
+
+    if (healthy.length > 0) return healthy
+    return this.state.endpoints.filter(endpoint => endpoint.enabled).sort((a, b) => a.priority - b.priority)
+  }
+
+  private upsertHealth(endpointId: string, patch: Partial<FallbackChainState['health'][string]>) {
+    const current = this.state.health[endpointId]
+    this.update({
+      health: {
+        ...this.state.health,
+        [endpointId]: {
+          ...(current ?? { state: 'healthy' as const, failureCount: 0 }),
+          ...patch,
+        },
+      },
+    })
+  }
+
+  private computeCooldownMs(reason: FallbackEvent['reason'], failureCount: number): number {
+    if (reason === 'rate_limit') return Math.min(5 * 60_000, DEFAULT_COOLDOWN_MS * Math.max(2, failureCount))
+    if (reason === 'timeout') return Math.min(2 * 60_000, DEFAULT_COOLDOWN_MS * Math.max(1, failureCount))
+    if (reason === 'error') return Math.min(90_000, DEFAULT_COOLDOWN_MS * Math.max(1, failureCount - 1))
+    return DEFAULT_COOLDOWN_MS
   }
 
   private update(patch: Partial<FallbackChainState>) {
@@ -45,14 +89,30 @@ class FallbackEngineStore {
     this.update({ events })
   }
 
-  setChain(endpoints: ProviderEndpoint[]) {
+  setChain(endpoints: ProviderEndpoint[], emitEvent = true) {
     const sorted = [...endpoints].sort((a, b) => a.priority - b.priority)
-    const activeEndpointId = sorted.find(e => e.enabled)?.id
+    const currentlyActive = this.state.activeEndpointId
+    const canKeepCurrent = currentlyActive && sorted.some(endpoint => endpoint.id === currentlyActive && endpoint.enabled)
+    const now = Date.now()
+    const eligible = sorted
+      .filter(endpoint => endpoint.enabled)
+      .filter(endpoint => {
+        const health = this.state.health[endpoint.id]
+        if (!health?.cooldownUntil) return true
+        return new Date(health.cooldownUntil).getTime() <= now
+      })
+    const activeEndpointId = canKeepCurrent ? currentlyActive : (eligible[0] ?? sorted.find(endpoint => endpoint.enabled))?.id
     this.update({ endpoints: sorted, activeEndpointId })
-    this.addEvent({ reason: 'manual', message: `Chain updated with ${sorted.length} endpoints` })
+    if (emitEvent) {
+      this.addEvent({ reason: 'manual', message: `Chain updated with ${sorted.length} endpoints` })
+    }
   }
 
-  syncFromProviders(providers: Array<{ id: string; name: string; enabled: boolean; priority: number }>, activeModelId?: string) {
+  syncFromProviders(
+    providers: Array<{ id: string; name: string; enabled: boolean; priority: number }>,
+    activeModelId?: string,
+    emitEvent = true,
+  ) {
     const endpoints: ProviderEndpoint[] = providers.map(p => ({
       id: p.id,
       provider: p.name,
@@ -60,12 +120,12 @@ class FallbackEngineStore {
       priority: p.priority,
       enabled: p.enabled,
     }))
-    this.setChain(endpoints)
+    this.setChain(endpoints, emitEvent)
   }
 
   selectNext(reason: FallbackEvent['reason'], message: string): FallbackResolution | null {
     const current = this.state.activeEndpointId
-    const sorted = [...this.state.endpoints].filter(e => e.enabled).sort((a, b) => a.priority - b.priority)
+    const sorted = this.getEligibleEndpoints()
     const currentIdx = sorted.findIndex(e => e.id === current)
     const next = sorted[currentIdx + 1] ?? sorted[0]
 
@@ -85,6 +145,13 @@ class FallbackEngineStore {
   }
 
   recordSuccess(endpointId: string) {
+    this.upsertHealth(endpointId, {
+      state: 'healthy',
+      failureCount: 0,
+      cooldownUntil: undefined,
+      lastError: undefined,
+    })
+
     if (this.state.activeEndpointId !== endpointId) {
       this.update({ activeEndpointId: endpointId })
     }
@@ -95,6 +162,19 @@ class FallbackEngineStore {
     reason: FallbackEvent['reason'],
     message: string,
   ): FallbackResolution | null {
+    const previousFailures = this.state.health[endpointId]?.failureCount ?? 0
+    const failureCount = previousFailures + 1
+    const cooldownMs = this.computeCooldownMs(reason, failureCount)
+    const cooldownUntil = new Date(Date.now() + cooldownMs).toISOString()
+
+    this.upsertHealth(endpointId, {
+      state: 'cooldown',
+      failureCount,
+      lastFailureAt: new Date().toISOString(),
+      cooldownUntil,
+      lastError: message,
+    })
+
     return this.selectNext(reason, `${endpointId} failed — ${message}`)
   }
 
@@ -104,6 +184,15 @@ class FallbackEngineStore {
 
   clearEvents() {
     this.update({ events: [] })
+  }
+
+  reset() {
+    this.update({
+      activeEndpointId: undefined,
+      endpoints: [],
+      events: [],
+      health: {},
+    })
   }
 }
 
@@ -126,8 +215,11 @@ export function useFallbackActions() {
     fallbackEngineStore.recordFailure(id, reason, msg), [])
   const clearEvents = useCallback(() => fallbackEngineStore.clearEvents(), [])
   const syncFromProviders = useCallback(
-    (providers: Array<{ id: string; name: string; enabled: boolean; priority: number }>, modelId?: string) =>
-      fallbackEngineStore.syncFromProviders(providers, modelId),
+    (
+      providers: Array<{ id: string; name: string; enabled: boolean; priority: number }>,
+      modelId?: string,
+      emitEvent?: boolean,
+    ) => fallbackEngineStore.syncFromProviders(providers, modelId, emitEvent),
     [],
   )
   return { setChain, selectNext, recordSuccess, recordFailure, clearEvents, syncFromProviders }

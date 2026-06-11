@@ -14,7 +14,7 @@ import type { GpuCapabilityProfile, HardwareBackend, ModelDownloadState, Registe
 
 export const HardwareScanPanel = memo(function HardwareScanPanel() {
   const state = useCookbook()
-  const { startScan, startDownload } = useCookbookActions()
+  const { startScan, startDownload, pauseDownload, cancelDownload, retryDownload } = useCookbookActions()
   const [downloading, setDownloading] = useState<string | null>(null)
 
   const handleScan = () => { void startScan() }
@@ -136,10 +136,26 @@ export const HardwareScanPanel = memo(function HardwareScanPanel() {
             return (
               <div className="mt-3 space-y-1.5">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-300">{dl.status === 'ready' ? 'Downloaded' : dl.status === 'failed' ? 'Failed' : `${dl.progress}%`}</span>
+                  <span className="text-slate-300">
+                    {dl.status === 'ready'
+                      ? 'Downloaded'
+                      : dl.status === 'failed'
+                        ? 'Failed'
+                        : dl.status === 'paused'
+                          ? 'Paused'
+                          : dl.status === 'cancelled'
+                            ? 'Cancelled'
+                            : `${dl.progress}%`}
+                  </span>
                   <StatusBadge
                     label={dl.status}
-                    tone={dl.status === 'ready' ? 'success' : dl.status === 'failed' ? 'danger' : 'warning'}
+                    tone={
+                      dl.status === 'ready'
+                        ? 'success'
+                        : dl.status === 'failed' || dl.status === 'cancelled'
+                          ? 'danger'
+                          : 'warning'
+                    }
                   />
                 </div>
                 {dl.status === 'downloading' && (
@@ -150,6 +166,33 @@ export const HardwareScanPanel = memo(function HardwareScanPanel() {
                     />
                   </div>
                 )}
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {dl.status === 'downloading' && (
+                    <>
+                      <button
+                        onClick={() => pauseDownload(dl.modelId)}
+                        className="rounded-md px-2 py-0.5 text-[11px] bg-slate-700 hover:bg-slate-600 text-slate-100 transition-colors"
+                      >
+                        Pause
+                      </button>
+                      <button
+                        onClick={() => cancelDownload(dl.modelId)}
+                        className="rounded-md px-2 py-0.5 text-[11px] bg-rose-900/80 hover:bg-rose-800 text-rose-100 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  )}
+
+                  {(dl.status === 'paused' || dl.status === 'failed' || dl.status === 'cancelled') && (
+                    <button
+                      onClick={() => void retryDownload(dl.modelId)}
+                      className="rounded-md px-2 py-0.5 text-[11px] bg-sky-700 hover:bg-sky-600 text-sky-100 transition-colors"
+                    >
+                      Retry
+                    </button>
+                  )}
+                </div>
                 {dl.errorMessage && <p className="text-xs text-rose-400">{dl.errorMessage}</p>}
               </div>
             )

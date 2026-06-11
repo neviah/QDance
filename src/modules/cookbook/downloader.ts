@@ -9,10 +9,28 @@ import { isTauri } from '../../utils/tauri'
 
 export type DownloadProgressCallback = (state: ModelDownloadState) => void
 
+export interface DownloadControlOptions {
+  signal?: AbortSignal
+}
+
+function getAbortReason(signal?: AbortSignal): 'paused' | 'cancelled' | null {
+  if (!signal?.aborted) return null
+  const reason = String(signal.reason ?? '').toLowerCase()
+  return reason === 'pause' ? 'paused' : 'cancelled'
+}
+
+function throwIfAborted(signal?: AbortSignal) {
+  const reason = getAbortReason(signal)
+  if (reason) {
+    throw new Error(reason === 'paused' ? '__DOWNLOAD_PAUSED__' : '__DOWNLOAD_CANCELLED__')
+  }
+}
+
 /** Downloads a model to the given destination path, reporting progress. */
 export async function downloadModel(
   request: ModelDownloadRequest,
   onProgress?: DownloadProgressCallback,
+  options?: DownloadControlOptions,
 ): Promise<ModelDownloadState> {
   const state: ModelDownloadState = {
     ...request,
@@ -21,11 +39,12 @@ export async function downloadModel(
   }
 
   onProgress?.(state)
+  throwIfAborted(options?.signal)
 
   if (isTauri()) {
-    return downloadViaTauri(request, state, onProgress)
+    return downloadViaTauri(request, state, onProgress, options)
   }
-  return downloadViaBrowser(request, state, onProgress)
+  return downloadViaBrowser(request, state, onProgress, options)
 }
 
 // -------------------------------------------------------
@@ -35,10 +54,12 @@ async function downloadViaTauri(
   request: ModelDownloadRequest,
   state: ModelDownloadState,
   onProgress?: DownloadProgressCallback,
+  options?: DownloadControlOptions,
 ): Promise<ModelDownloadState> {
   try {
     const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http')
     const { writeFile, mkdir } = await import('@tauri-apps/plugin-fs')
+    throwIfAborted(options?.signal)
 
     // Ensure destination directory exists
     const dir = request.destinationPath.substring(0, Math.max(request.destinationPath.lastIndexOf('/'), request.destinationPath.lastIndexOf('\\')))
@@ -59,6 +80,7 @@ async function downloadViaTauri(
     if (response.body) {
       const reader = response.body.getReader()
       while (true) {
+        throwIfAborted(options?.signal)
         const { done, value } = await reader.read()
         if (done) break
         if (value) {
@@ -91,8 +113,17 @@ async function downloadViaTauri(
     onProgress?.(state)
     return state
   } catch (err) {
-    state.status = 'failed'
-    state.errorMessage = err instanceof Error ? err.message : String(err)
+    const message = err instanceof Error ? err.message : String(err)
+    if (message === '__DOWNLOAD_PAUSED__') {
+      state.status = 'paused'
+      state.errorMessage = undefined
+    } else if (message === '__DOWNLOAD_CANCELLED__') {
+      state.status = 'cancelled'
+      state.errorMessage = undefined
+    } else {
+      state.status = 'failed'
+      state.errorMessage = message
+    }
     onProgress?.(state)
     return state
   }
@@ -106,9 +137,11 @@ async function downloadViaBrowser(
   request: ModelDownloadRequest,
   state: ModelDownloadState,
   onProgress?: DownloadProgressCallback,
+  options?: DownloadControlOptions,
 ): Promise<ModelDownloadState> {
   try {
-    const response = await fetch(request.sourceUri)
+    throwIfAborted(options?.signal)
+    const response = await fetch(request.sourceUri, { signal: options?.signal })
     if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
 
     const totalStr = response.headers.get('content-length')
@@ -121,6 +154,7 @@ async function downloadViaBrowser(
     if (response.body) {
       const reader = response.body.getReader()
       while (true) {
+        throwIfAborted(options?.signal)
         const { done, value } = await reader.read()
         if (done) break
         if (value) {
@@ -144,15 +178,20 @@ async function downloadViaBrowser(
       full.set(chunk, offset)
       offset += chunk.byteLength
     }
-    const blob = new Blob([full])
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = request.destinationPath.split(/[\\/]/).at(-1) ?? 'model.gguf'
-    a.style.display = 'none'
-    document.body.appendChild(a)
-    a.click()
-    setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a) }, 500)
+    if (typeof document !== 'undefined') {
+      const blob = new Blob([full])
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = request.destinationPath.split(/[\\/]/).at(-1) ?? 'model.gguf'
+      a.style.display = 'none'
+      document.body.appendChild(a)
+      a.click()
+      setTimeout(() => {
+        URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+      }, 500)
+    }
 
     state.status = 'ready'
     state.progress = 100
@@ -160,8 +199,17 @@ async function downloadViaBrowser(
     onProgress?.(state)
     return state
   } catch (err) {
-    state.status = 'failed'
-    state.errorMessage = err instanceof Error ? err.message : String(err)
+    const message = err instanceof Error ? err.message : String(err)
+    if (message === '__DOWNLOAD_PAUSED__') {
+      state.status = 'paused'
+      state.errorMessage = undefined
+    } else if (message === '__DOWNLOAD_CANCELLED__' || message.includes('The operation was aborted')) {
+      state.status = 'cancelled'
+      state.errorMessage = undefined
+    } else {
+      state.status = 'failed'
+      state.errorMessage = message
+    }
     onProgress?.(state)
     return state
   }

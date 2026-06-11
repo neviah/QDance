@@ -19,6 +19,15 @@ export interface FallbackChainState {
   activeEndpointId?: string
   endpoints: ProviderEndpoint[]
   events: FallbackEvent[]
+  health: Record<string, FallbackProviderHealth>
+}
+
+export interface FallbackProviderHealth {
+  state: 'healthy' | 'cooldown'
+  failureCount: number
+  lastFailureAt?: string
+  cooldownUntil?: string
+  lastError?: string
 }
 
 export interface FallbackResolution {

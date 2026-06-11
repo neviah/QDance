@@ -66,6 +66,8 @@ class CookbookStore {
   private snapshot: CookbookSnapshot = loadPersistedSnapshot()
   private subscribers = new Set<Subscriber>()
   private version = 0
+  private activeDownloads = new Map<string, AbortController>()
+  private lastDownloadRequests = new Map<string, ModelDownloadRequest>()
 
   getSnapshot = (): CookbookSnapshot => this.snapshot
 
@@ -105,6 +107,12 @@ class CookbookStore {
   }
 
   async startDownload(request: ModelDownloadRequest) {
+    this.lastDownloadRequests.set(request.modelId, request)
+
+    this.activeDownloads.get(request.modelId)?.abort('cancel')
+    const controller = new AbortController()
+    this.activeDownloads.set(request.modelId, controller)
+
     const initial: ModelDownloadState = { ...request, status: 'queued', progress: 0 }
     this.update({ downloads: [...this.snapshot.downloads.filter(d => d.modelId !== request.modelId), initial] })
 
@@ -114,7 +122,8 @@ class CookbookStore {
       })
     }
 
-    const result = await execDownload(request, onProgress)
+    const result = await execDownload(request, onProgress, { signal: controller.signal })
+    this.activeDownloads.delete(request.modelId)
 
     if (result.status === 'ready') {
       const registered: RegisteredModel = {
@@ -138,7 +147,39 @@ class CookbookStore {
           registered,
         ],
       })
+      return
     }
+
+    this.update({
+      downloads: this.snapshot.downloads.map(d => (d.modelId === result.modelId ? result : d)),
+    })
+  }
+
+  pauseDownload(modelId: string) {
+    this.activeDownloads.get(modelId)?.abort('pause')
+  }
+
+  cancelDownload(modelId: string) {
+    this.activeDownloads.get(modelId)?.abort('cancel')
+    this.update({
+      downloads: this.snapshot.downloads.map(download =>
+        download.modelId === modelId
+          ? { ...download, status: 'cancelled', errorMessage: undefined }
+          : download,
+      ),
+    })
+  }
+
+  async retryDownload(modelId: string) {
+    const request = this.lastDownloadRequests.get(modelId) ?? this.snapshot.downloads.find(download => download.modelId === modelId)
+    if (!request) return
+    await this.startDownload({
+      modelId: request.modelId,
+      sourceUri: request.sourceUri,
+      destinationPath: request.destinationPath,
+      revision: request.revision,
+      checksum: request.checksum,
+    })
   }
 
   registerModel(model: RegisteredModel) {
@@ -170,7 +211,10 @@ export function useCookbook() {
 export function useCookbookActions() {
   const startScan = useCallback(() => cookbookStore.startScan(), [])
   const startDownload = useCallback((req: ModelDownloadRequest) => cookbookStore.startDownload(req), [])
+  const pauseDownload = useCallback((id: string) => cookbookStore.pauseDownload(id), [])
+  const cancelDownload = useCallback((id: string) => cookbookStore.cancelDownload(id), [])
+  const retryDownload = useCallback((id: string) => cookbookStore.retryDownload(id), [])
   const registerModel = useCallback((m: RegisteredModel) => cookbookStore.registerModel(m), [])
   const removeModel = useCallback((id: string) => cookbookStore.removeRegisteredModel(id), [])
-  return { startScan, startDownload, registerModel, removeModel }
+  return { startScan, startDownload, pauseDownload, cancelDownload, retryDownload, registerModel, removeModel }
 }

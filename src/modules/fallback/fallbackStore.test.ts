@@ -4,8 +4,7 @@ import { fallbackEngineStore } from './fallbackStore'
 describe('fallbackEngineStore', () => {
   beforeEach(() => {
     localStorage.clear()
-    fallbackEngineStore.setChain([])
-    fallbackEngineStore.clearEvents()
+    fallbackEngineStore.reset()
   })
 
   it('sets chain ordered by priority and picks the first enabled endpoint', () => {
@@ -30,5 +29,23 @@ describe('fallbackEngineStore', () => {
     expect(resolution?.endpoint.id).toBe('p2')
     expect(fallbackEngineStore.getSnapshot().activeEndpointId).toBe('p2')
     expect(fallbackEngineStore.getSnapshot().events.length).toBeGreaterThan(0)
+  })
+
+  it('skips providers currently in cooldown when selecting next endpoint', () => {
+    fallbackEngineStore.setChain([
+      { id: 'p1', provider: 'A', model: 'm', priority: 10, enabled: true },
+      { id: 'p2', provider: 'B', model: 'm', priority: 20, enabled: true },
+      { id: 'p3', provider: 'C', model: 'm', priority: 30, enabled: true },
+    ])
+
+    const first = fallbackEngineStore.recordFailure('p1', 'error', 'boom-1')
+    expect(first?.endpoint.id).toBe('p2')
+
+    const second = fallbackEngineStore.recordFailure('p2', 'rate_limit', 'boom-2')
+    expect(second?.endpoint.id).toBe('p3')
+
+    const snapshot = fallbackEngineStore.getSnapshot()
+    expect(snapshot.health.p1?.state).toBe('cooldown')
+    expect(snapshot.health.p2?.state).toBe('cooldown')
   })
 })
