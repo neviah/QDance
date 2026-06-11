@@ -27,6 +27,14 @@
 - **Docker 部署** — 前后端分离容器化，开箱即用
 - **桌面应用** — 基于 Tauri 的原生客户端（macOS / Linux / Windows）
 - **动态端口路由** — 容器内开发服务自动发现，生成预览链接
+- **Autonomous Harness（Beta）** — 右侧抽屉集成硬件扫描、Provider 注册、Fallback 链路与 Agent Loop
+
+### Autonomous Harness（Beta）
+
+- 在主聊天界面右下角点击 `🤖 Autonomous` 按钮打开。
+- 已实现硬件扫描与模型推荐/下载 UI。
+- Provider 链路与运行时 fallback 已接入真实发送失败场景。
+- 该区域仍在迭代中，下载高级控制与 workspace 脚手架健壮性仍在完善。
 
 ## 技术栈
 

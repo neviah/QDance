@@ -27,6 +27,14 @@ A third-party Web frontend for [OpenCode](https://github.com/anomalyco/opencode)
 - **Docker Deployment** — Containerized frontend and backend separation, ready to use out of the box
 - **Desktop App** — Native client based on Tauri (macOS / Linux / Windows)
 - **Dynamic Port Routing** — Auto-discovery of dev services inside containers, generates preview links
+- **Autonomous Harness (Beta)** — Right-side drawer with hardware scan, provider registry, fallback chain, and agent loop panels
+
+### Autonomous Harness (Beta)
+
+- Open via the floating `🤖 Autonomous` button in the main chat UI.
+- Hardware scan and model recommendation/download UI are implemented.
+- Provider chain and runtime fallback are integrated for real send-time provider failures.
+- This area is still evolving; advanced download controls and workspace scaffold hardening are in progress.
 
 ## Tech Stack
 

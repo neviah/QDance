@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+- feat(autonomous): wire runtime provider failover for chat sends and agent loop execution
+- feat(cookbook): auto-register downloaded local models into provider registry and activate local provider selection
+- fix(cookbook): restore persisted downloads safely by marking interrupted queued/downloading states as failed
+- fix(cookbook): harden hardware probing for non-browser contexts and deduplicate detected capability/backend lists
+- test(autonomous): add baseline tests for autonomous panels and module stores
+
 ## [v0.6.17] - 2026-06-07
 
 - fix: default changes panel to last turn scope (0c341e9)

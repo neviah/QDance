@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { invoke } from '@tauri-apps/api/core'
 import { Sidebar } from './features/chat'
 import { ChatPane } from './features/chat/ChatPane'
+import { AutonomousPanel } from './components/AutonomousPanel'
 import { SplitContainer } from './features/chat/SplitContainer'
 import type { CommandItem } from './components/CommandPalette'
 import { ToastContainer } from './components/ToastContainer'
@@ -565,6 +566,8 @@ function App() {
 
   const { showCloseDialog, handleCloseDialogConfirm, handleCloseDialogCancel } = useCloseServiceDialog()
 
+  const [autonomousPanelOpen, setAutonomousPanelOpen] = useState(false)
+
   return (
     <div className="relative flex h-full flex-col bg-bg-100 overflow-hidden">
       <DesktopTitlebar />
@@ -607,8 +610,24 @@ function App() {
             </div>
 
             <RightPanel directory={focusedDirectory} sessionId={paneLayout.focusedSessionId} />
+
+            {/* Autonomous Panel Drawer */}
+            {autonomousPanelOpen && (
+              <div className="w-96 shrink-0 border-l border-white/10 h-full overflow-hidden flex flex-col">
+                <AutonomousPanel directory={focusedDirectory} className="flex-1" />
+              </div>
+            )}
           </div>
           <ToastContainer onOpenAbout={openAboutSettings} />
+
+          {/* Autonomous Panel Toggle Button */}
+          <button
+            onClick={() => setAutonomousPanelOpen(v => !v)}
+            title={autonomousPanelOpen ? 'Close Autonomous Panel' : 'Open Autonomous Panel'}
+            className="absolute bottom-4 right-4 z-50 flex items-center gap-1.5 rounded-full bg-sky-600 hover:bg-sky-500 text-white px-3 py-1.5 text-xs font-medium shadow-lg transition-colors"
+          >
+            🤖 {autonomousPanelOpen ? 'Close' : 'Autonomous'}
+          </button>
         </div>
 
         <Suspense fallback={null}>

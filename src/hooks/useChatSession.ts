@@ -22,7 +22,6 @@ import { usePermissions, usePermissionHandler, useMessageAnimation, useDirectory
 import { useNotification } from './useNotification'
 import { notificationEventSettingsStore } from '../store/notificationEventSettingsStore'
 import {
-  sendMessageAsync,
   getSessionMessages,
   abortSession,
   getSelectableAgents,
@@ -50,6 +49,7 @@ import { STORAGE_KEY_SELECTED_AGENT } from '../constants'
 import type { ChatAreaHandle } from '../features/chat'
 import { followupQueueStore, useFollowupQueue } from '../store/followupQueueStore'
 import { themeStore } from '../store/themeStore'
+import { sendMessageAsyncWithFallback } from '../modules/fallback'
 
 const handleError = createErrorHandler('session')
 
@@ -635,7 +635,7 @@ export function useChatSession({
         // 记录发送前的消息数量，作为判断 SSE 是否推送新消息的基线
         const msgCountBeforeSend = messageStore.getSessionState(sessionId)?.messages.length ?? 0
 
-        await sendMessageAsync({
+        await sendMessageAsyncWithFallback({
           sessionId,
           text: input.content,
           attachments: input.attachments,
