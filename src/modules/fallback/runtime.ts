@@ -21,6 +21,9 @@ function resolveModelForProvider(providerId: string, preferredModelId: string): 
 }
 
 function syncFallbackChain(activeModelId: string) {
+  const existing = fallbackEngineStore.getSnapshot()
+  if (existing.endpoints.length > 0) return
+
   const providers = providerRegistryStore
     .getSnapshot()
     .providers
@@ -42,7 +45,7 @@ export async function sendMessageAsyncWithFallback(
 
   const activeEndpoint = fallbackEngineStore.getActiveEndpoint()
   let providerID = activeEndpoint?.id ?? params.model.providerID
-  let modelID = resolveModelForProvider(providerID, params.model.modelID)
+  let modelID = activeEndpoint?.model || resolveModelForProvider(providerID, params.model.modelID)
   const attemptedProviderIds = new Set<string>()
   let lastError: unknown
 
@@ -79,7 +82,7 @@ export async function sendMessageAsyncWithFallback(
 
       options?.onFallback?.(providerID, resolution.endpoint.id, message)
       providerID = resolution.endpoint.id
-      modelID = resolveModelForProvider(providerID, params.model.modelID)
+      modelID = resolution.endpoint.model || resolveModelForProvider(providerID, params.model.modelID)
     }
   }
 

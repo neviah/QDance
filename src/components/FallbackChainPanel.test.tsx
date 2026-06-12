@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
-const syncFromProvidersMock = vi.fn()
+const setChainMock = vi.fn()
 
 vi.mock('../modules/fallback', () => ({
   useFallbackChain: () => ({
@@ -11,35 +11,54 @@ vi.mock('../modules/fallback', () => ({
   }),
   useFallbackActions: () => ({
     clearEvents: vi.fn(),
-    syncFromProviders: syncFromProvidersMock,
+    setChain: setChainMock,
+  }),
+}))
+
+vi.mock('../hooks', () => ({
+  useModels: () => ({
+    models: [
+      { id: 'deepseek-chat', name: 'DeepSeek Chat', providerId: 'deepseek' },
+      { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner', providerId: 'deepseek' },
+      { id: 'openai/gpt-4o-mini', name: 'GPT-4o mini', providerId: 'openrouter' },
+    ],
   }),
 }))
 
 vi.mock('../providers', () => ({
   useProviderRegistry: () => ({
     providers: [
-      { id: 'openrouter', name: 'OpenRouter', enabled: true, priority: 10 },
-      { id: 'deepseek', name: 'DeepSeek', enabled: true, priority: 20 },
+      { id: 'openrouter', name: 'OpenRouter', kind: 'openrouter', enabled: true, priority: 10, supportedModels: [] },
+      { id: 'deepseek', name: 'DeepSeek', kind: 'deepseek', enabled: true, priority: 20, supportedModels: [] },
     ],
   }),
   useProviderRegistryActions: () => ({
     toggle: vi.fn(),
-    setPriority: vi.fn(),
   }),
 }))
 
 import { FallbackChainPanel } from './FallbackChainPanel'
 
 describe('FallbackChainPanel', () => {
-  it('syncs chain using current provider registry values', () => {
+  it('adds provider rows and syncs them into the fallback chain', () => {
     render(<FallbackChainPanel />)
 
-    fireEvent.click(screen.getByRole('button', { name: /sync from providers/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^add$/i }))
 
-    expect(syncFromProvidersMock).toHaveBeenCalledTimes(1)
-    expect(syncFromProvidersMock).toHaveBeenCalledWith([
-      { id: 'openrouter', name: 'OpenRouter', enabled: true, priority: 10 },
-      { id: 'deepseek', name: 'DeepSeek', enabled: true, priority: 20 },
+    const providerSelect = screen.getByRole('combobox', { name: /provider row 1/i })
+    fireEvent.change(providerSelect, { target: { value: 'deepseek' } })
+
+    const modelSelect = screen.getByRole('combobox', { name: /model row 1/i })
+    fireEvent.change(modelSelect, { target: { value: 'deepseek-reasoner' } })
+
+    expect(setChainMock).toHaveBeenCalledWith([
+      {
+        id: 'deepseek',
+        provider: 'DeepSeek',
+        model: 'deepseek-reasoner',
+        priority: 10,
+        enabled: true,
+      },
     ])
   })
 })
