@@ -59,6 +59,16 @@ opencode serve --cors "https://lehhair.github.io"
 
 Then open https://lehhair.github.io/OpenCodeUI/
 
+### Browser-First Launcher
+
+If you want the original browser workflow back on Windows, double-click [start-web-ui.bat](start-web-ui.bat). It starts the backend, starts the local Vite UI, and opens the browser at `http://localhost:5173`.
+
+If you already have `opencode serve` running, you can also start only the UI with:
+
+```bash
+npm run dev
+```
+
 ## Docker Deployment (Frontend Only)
 
 For scenarios where `opencode serve` is already running, you only need a frontend UI container to connect to the existing backend.

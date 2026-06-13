@@ -144,5 +144,28 @@ export function resolveDownloadUrl(modelId: string): { repo: string; fileName: s
   }
 }
 
+/** Return all catalogue entries that fit the current hardware, with a fit rating. */
+export function getCompatibleModels(
+  scan: HardwareScanResult,
+): Array<ModelEntry & { fit: 'perfect' | 'good' | 'ok' }> {
+  const vram = bestVramGiB(scan)
+  const backends = new Set(scan.detectedBackends)
+
+  return MODEL_CATALOGUE.filter(m => {
+    const hasBackend = m.backends.some(b => backends.has(b) || b === 'cpu')
+    if (!hasBackend) return false
+    const fitsVram = vram > 0 ? m.estimatedVRAMGiB <= vram * 0.9 : true
+    const fitsRam = m.minRamGiB ? scan.ramGiB >= m.minRamGiB : true
+    return fitsVram && fitsRam
+  }).map(m => {
+    const gpuBackend = m.backends.some(
+      b => (b === 'cuda' || b === 'rocm' || b === 'metal') && backends.has(b),
+    )
+    const accelBackend = m.backends.some(b => b === 'vulkan' && backends.has(b))
+    const fit: 'perfect' | 'good' | 'ok' = gpuBackend ? 'perfect' : accelBackend ? 'good' : 'ok'
+    return { ...m, fit }
+  })
+}
+
 export { MODEL_CATALOGUE }
 export type { ModelEntry }

@@ -47,6 +47,17 @@ vi.mock('../modules/cookbook', () => ({
 
 vi.mock('../modules/cookbook/recommend', () => ({
   resolveDownloadUrl: vi.fn(),
+  getCompatibleModels: () => [
+    {
+      family: 'Qwen2.5-Coder',
+      modelId: 'qwen2.5-coder:7b-instruct-q6_K',
+      quantization: 'Q6_K',
+      estimatedVRAMGiB: 6,
+      estimatedContextWindow: 32768,
+      backends: ['cuda'],
+      fit: 'perfect',
+    },
+  ],
 }))
 
 import { HardwareScanPanel } from './HardwareScanPanel'
@@ -65,12 +76,13 @@ describe('HardwareScanPanel', () => {
   })
 
   it('allows retrying a paused download for the recommended model', () => {
-    mockState.recommendation = {
-      family: 'Qwen2.5-Coder',
-      modelId: 'qwen2.5-coder:7b-instruct-q6_K',
-      quantization: 'Q6_K',
-      source: 'local',
-      reasoning: 'test',
+    mockState.scanStatus = 'done'
+    mockState.scan = {
+      cpu: { modelName: 'Test CPU', threadCount: 8, instructionSets: [] },
+      ramGiB: 32,
+      gpus: [],
+      detectedBackends: ['cuda'],
+      notes: [],
     }
     mockState.downloads = [
       {

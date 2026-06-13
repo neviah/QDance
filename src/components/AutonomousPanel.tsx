@@ -16,10 +16,10 @@ interface TabDef {
 }
 
 const TABS: TabDef[] = [
-  { id: 'hardware', label: 'Hardware', icon: '🖥' },
-  { id: 'providers', label: 'Providers', icon: '🔌' },
-  { id: 'fallback', label: 'Fallback', icon: '🔀' },
-  { id: 'agent', label: 'Agent Loop', icon: '🤖' },
+  { id: 'hardware', label: 'Hardware', icon: '' },
+  { id: 'providers', label: 'Providers', icon: '' },
+  { id: 'fallback', label: 'Fallback', icon: '' },
+  { id: 'agent', label: 'Agent Loop', icon: '' },
 ]
 
 const HardwareScanPanel = lazy(() =>
@@ -52,22 +52,21 @@ export const AutonomousPanel = memo(function AutonomousPanel({ directory, classN
   const [activeTab, setActiveTab] = useState<TabId>('hardware')
 
   return (
-    <div className={clsx('flex flex-col bg-slate-950 text-slate-100 h-full', className)}>
+    <div className={clsx('flex flex-col bg-bg-000 text-text-100 h-full', className)}>
       {/* Tab bar */}
-      <div className="flex items-center gap-0 border-b border-white/10 bg-slate-900/80 px-2 shrink-0">
+      <div className="flex items-center border-b border-border-200/50 px-2 shrink-0 overflow-x-auto">
         {TABS.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={clsx(
-              'flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-b-2 -mb-px',
+              'px-3 py-2.5 text-[length:var(--fs-xs)] font-medium transition-colors border-b-2 -mb-px whitespace-nowrap',
               activeTab === tab.id
-                ? 'border-sky-400 text-sky-300'
-                : 'border-transparent text-slate-400 hover:text-slate-200',
+                ? 'border-accent-main-100 text-text-100'
+                : 'border-transparent text-text-400 hover:text-text-200',
             )}
           >
-            <span>{tab.icon}</span>
-            <span>{tab.label}</span>
+            {tab.label}
           </button>
         ))}
       </div>

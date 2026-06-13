@@ -53,7 +53,8 @@ fn create_main_window(app: &tauri::AppHandle) -> Result<tauri::WebviewWindow, ta
         .expect("main window config missing");
 
     configure_desktop_window_builder(tauri::WebviewWindowBuilder::from_config(app, &config)?)
-        .visible(false)
+        // Show immediately to avoid invisible-start failures when frontend readiness signal is delayed.
+        .visible(true)
         .build()
 }
 

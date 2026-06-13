@@ -113,15 +113,15 @@ export const FallbackChainPanel = memo(function FallbackChainPanel() {
         <div className="mb-3 flex items-center gap-2">
           <button
             onClick={addChainRow}
-            className="rounded-lg px-3 py-1.5 text-xs font-medium bg-sky-600 hover:bg-sky-500 text-white transition-colors"
+            className="rounded-lg px-3 py-1.5 text-[length:var(--fs-xs)] font-medium bg-accent-main-100 hover:bg-accent-main-200 text-bg-000 transition-colors"
           >
             Add
           </button>
-          <p className="text-xs text-slate-500">Pick providers in order. Add another row to append to the chain.</p>
+          <p className="text-[length:var(--fs-xs)] text-text-500">Pick providers in order. Add another row to append to the chain.</p>
         </div>
 
         {chainDraft.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-white/10 bg-slate-950/40 p-4 text-xs text-slate-500">
+          <div className="rounded-lg border border-dashed border-border-200/30 p-4 text-[length:var(--fs-xs)] text-text-500">
             No providers selected yet. Press Add to build the chain.
           </div>
         ) : (
@@ -136,23 +136,22 @@ export const FallbackChainPanel = memo(function FallbackChainPanel() {
                 <li
                   key={`${index}-${row.providerId || 'empty'}-${row.modelId || 'none'}`}
                   className={clsx(
-                    'rounded-xl border px-3 py-2 flex items-center gap-2 flex-wrap',
-                    isActive ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-white/10 bg-slate-900/60',
+                    'rounded-lg border px-3 py-2 flex items-center gap-2 flex-wrap',
+                    isActive ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-border-200/40 bg-bg-100/40',
                   )}
                 >
-                  <span className="text-slate-300 text-xs font-mono w-5 shrink-0">{(index + 1) * 10}</span>
+                  <span className="text-text-400 text-[length:var(--fs-xxs)] font-mono w-5 shrink-0">{(index + 1) * 10}</span>
                   <select
                     aria-label={`Provider row ${index + 1}`}
                     value={row.providerId}
                     onChange={e => updateProvider(index, e.target.value)}
-                    className="min-w-0 flex-1 rounded-lg border border-white/10 bg-slate-800 px-2 py-1.5 text-sm text-slate-100 focus:outline-none min-w-[10rem]"
+                    className="min-w-0 flex-1 rounded-lg border border-border-200/40 bg-bg-200/60 px-2 py-1.5 text-[length:var(--fs-sm)] text-text-100 focus:outline-none min-w-[10rem]"
                   >
                     <option value="">Select provider…</option>
                     {registry.providers.map((provider: ProviderDefinition) => (
                       <option
                         key={provider.id}
                         value={provider.id}
-                        disabled={chainDraft.some((item, otherIndex) => otherIndex !== index && item.providerId === provider.id)}
                       >
                         {provider.name}
                       </option>
@@ -163,7 +162,7 @@ export const FallbackChainPanel = memo(function FallbackChainPanel() {
                     value={row.modelId}
                     onChange={e => updateModel(index, e.target.value)}
                     disabled={!row.providerId}
-                    className="min-w-0 flex-1 rounded-lg border border-white/10 bg-slate-800 px-2 py-1.5 text-sm text-slate-100 focus:outline-none min-w-[12rem] disabled:opacity-60"
+                    className="min-w-0 flex-1 rounded-lg border border-border-200/40 bg-bg-200/60 px-2 py-1.5 text-[length:var(--fs-sm)] text-text-100 focus:outline-none min-w-[12rem] disabled:opacity-50"
                   >
                     <option value="">Select model…</option>
                     {providerModels.map(model => (
@@ -178,12 +177,12 @@ export const FallbackChainPanel = memo(function FallbackChainPanel() {
                     onClick={() => toggle(row.providerId, !selectedProvider?.enabled)}
                     disabled={!selectedProvider}
                     className={clsx(
-                      'rounded-full px-2 py-0.5 text-xs font-medium transition-colors',
+                      'rounded-full px-2 py-0.5 text-[length:var(--fs-xs)] font-medium transition-colors',
                       !selectedProvider
-                        ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                        ? 'bg-bg-200/40 text-text-500 cursor-not-allowed'
                         : selectedProvider.enabled
-                          ? 'bg-slate-700 text-slate-200 hover:bg-rose-900/70'
-                          : 'bg-slate-800 text-slate-400 hover:bg-emerald-900/50',
+                          ? 'bg-bg-200/60 text-text-300 hover:bg-rose-500/20 hover:text-rose-300'
+                          : 'bg-bg-200/40 text-text-400 hover:bg-emerald-500/20 hover:text-emerald-300',
                     )}
                   >
                     {selectedProvider?.enabled ? 'Disable' : 'Enable'}
@@ -192,7 +191,7 @@ export const FallbackChainPanel = memo(function FallbackChainPanel() {
                     <button
                       onClick={() => moveChainRow(index, -1)}
                       disabled={index === 0}
-                      className="text-xs px-1 text-slate-400 hover:text-white disabled:opacity-30"
+                      className="text-[length:var(--fs-xs)] px-1 text-text-400 hover:text-text-100 disabled:opacity-30"
                       title="Move up"
                     >
                       ↑
@@ -200,14 +199,14 @@ export const FallbackChainPanel = memo(function FallbackChainPanel() {
                     <button
                       onClick={() => moveChainRow(index, 1)}
                       disabled={index === chainDraft.length - 1}
-                      className="text-xs px-1 text-slate-400 hover:text-white disabled:opacity-30"
+                      className="text-[length:var(--fs-xs)] px-1 text-text-400 hover:text-text-100 disabled:opacity-30"
                       title="Move down"
                     >
                       ↓
                     </button>
                     <button
                       onClick={() => removeChainRow(index)}
-                      className="text-xs px-1 text-rose-400 hover:text-rose-200"
+                      className="text-[length:var(--fs-xs)] px-1 text-rose-400/70 hover:text-rose-300"
                       title="Remove"
                     >
                       ✕
@@ -227,26 +226,26 @@ export const FallbackChainPanel = memo(function FallbackChainPanel() {
         statusTone={chain.events.length > 0 ? 'warning' : 'neutral'}
       >
         {chain.events.length === 0 ? (
-          <p className="text-xs text-slate-500">No fallback events recorded.</p>
+          <p className="text-[length:var(--fs-xs)] text-text-500">No fallback events recorded.</p>
         ) : (
           <>
             <button
               onClick={clearEvents}
-              className="mb-3 rounded-lg px-3 py-1 text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-200 transition-colors"
+              className="mb-3 rounded-lg px-3 py-1 text-[length:var(--fs-xs)] font-medium bg-bg-200/60 hover:bg-bg-200/80 text-text-200 transition-colors"
             >
               Clear log
             </button>
             <ul className="space-y-1.5 max-h-64 overflow-y-auto">
               {chain.events.map((ev: FallbackEvent, i: number) => (
                 <li key={i} className="text-xs flex items-start gap-2">
-                  <span className="text-slate-500 shrink-0 tabular-nums">
+                  <span className="text-text-500 shrink-0 tabular-nums text-[length:var(--fs-xxs)]">
                     {new Date(ev.timestamp).toLocaleTimeString()}
                   </span>
                   <StatusBadge
                     label={ev.reason}
                     tone={ev.reason === 'error' || ev.reason === 'rate_limit' ? 'danger' : 'info'}
                   />
-                  <span className="text-slate-300">{ev.message}</span>
+                  <span className="text-text-300 text-[length:var(--fs-xs)]">{ev.message}</span>
                 </li>
               ))}
             </ul>

@@ -57,22 +57,22 @@ export const ProviderSelectorPanel = memo(function ProviderSelectorPanel() {
       >
         <button
           onClick={() => setShowAddForm(v => !v)}
-          className="mb-3 rounded-lg px-3 py-1.5 text-xs font-medium bg-sky-600 hover:bg-sky-500 text-white transition-colors"
+          className="mb-3 rounded-lg px-3 py-1.5 text-[length:var(--fs-xs)] font-medium bg-accent-main-100 hover:bg-accent-main-200 text-bg-000 transition-colors"
         >
           {showAddForm ? 'Cancel' : '+ Add Provider'}
         </button>
 
         {showAddForm && (
-          <div className="mb-4 rounded-xl border border-white/10 bg-slate-900/80 p-4 space-y-3 text-xs">
-            <h4 className="text-slate-200 font-semibold">New Provider</h4>
+          <div className="mb-4 rounded-xl border border-border-200/40 bg-bg-000/80 p-4 space-y-3 text-[length:var(--fs-xs)]">
+            <h4 className="text-text-100 font-semibold">New Provider</h4>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-slate-400 mb-1">Kind</label>
+                <label className="block text-text-400 mb-1">Kind</label>
                 <select
                   value={newProvider.kind}
                   onChange={e => setNewProvider((p: Partial<ProviderDefinition>) => ({ ...p, kind: e.target.value as ProviderKind }))}
-                  className="w-full rounded-lg border border-white/10 bg-slate-800 px-2 py-1.5 text-slate-100 focus:outline-none"
+                  className="w-full rounded-lg border border-border-200/40 bg-bg-200/60 px-2 py-1.5 text-text-100 focus:outline-none"
                 >
                   {Object.entries(KIND_LABELS).map(([k, v]) => (
                     <option key={k} value={k}>{v}</option>
@@ -80,64 +80,64 @@ export const ProviderSelectorPanel = memo(function ProviderSelectorPanel() {
                 </select>
               </div>
               <div>
-                <label className="block text-slate-400 mb-1">ID</label>
+                <label className="block text-text-400 mb-1">ID</label>
                 <input
                   value={newProvider.id ?? ''}
                   onChange={e => setNewProvider((p: Partial<ProviderDefinition>) => ({ ...p, id: e.target.value }))}
                   placeholder="e.g. openai-custom"
-                  className="w-full rounded-lg border border-white/10 bg-slate-800 px-2 py-1.5 text-slate-100 focus:outline-none"
+                  className="w-full rounded-lg border border-border-200/40 bg-bg-200/60 px-2 py-1.5 text-text-100 focus:outline-none"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-slate-400 mb-1">Display Name</label>
+              <label className="block text-text-400 mb-1">Display Name</label>
               <input
                 value={newProvider.name ?? ''}
                 onChange={e => setNewProvider((p: Partial<ProviderDefinition>) => ({ ...p, name: e.target.value }))}
                 placeholder="My Provider"
-                className="w-full rounded-lg border border-white/10 bg-slate-800 px-2 py-1.5 text-slate-100 focus:outline-none"
+                className="w-full rounded-lg border border-border-200/40 bg-bg-200/60 px-2 py-1.5 text-text-100 focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="block text-slate-400 mb-1">Base URL (optional)</label>
+              <label className="block text-text-400 mb-1">Base URL (optional)</label>
               <input
                 value={newProvider.baseUrl ?? ''}
                 onChange={e => setNewProvider((p: Partial<ProviderDefinition>) => ({ ...p, baseUrl: e.target.value }))}
                 placeholder="https://api.example.com/v1"
-                className="w-full rounded-lg border border-white/10 bg-slate-800 px-2 py-1.5 text-slate-100 focus:outline-none"
+                className="w-full rounded-lg border border-border-200/40 bg-bg-200/60 px-2 py-1.5 text-text-100 focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="block text-slate-400 mb-1">API Key env var (optional)</label>
+              <label className="block text-text-400 mb-1">API Key env var (optional)</label>
               <input
                 value={newProvider.apiKeyEnvVar ?? ''}
                 onChange={e => setNewProvider((p: Partial<ProviderDefinition>) => ({ ...p, apiKeyEnvVar: e.target.value }))}
                 placeholder="MY_API_KEY"
-                className="w-full rounded-lg border border-white/10 bg-slate-800 px-2 py-1.5 text-slate-100 focus:outline-none"
+                className="w-full rounded-lg border border-border-200/40 bg-bg-200/60 px-2 py-1.5 text-text-100 focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="block text-slate-400 mb-1">Priority (lower = higher priority)</label>
+              <label className="block text-text-400 mb-1">Priority (lower = higher priority)</label>
               <input
                 type="number"
                 value={newProvider.priority ?? 50}
                 onChange={e => setNewProvider((p: Partial<ProviderDefinition>) => ({ ...p, priority: parseInt(e.target.value, 10) || 50 }))}
-                className="w-24 rounded-lg border border-white/10 bg-slate-800 px-2 py-1.5 text-slate-100 focus:outline-none"
+                className="w-24 rounded-lg border border-border-200/40 bg-bg-200/60 px-2 py-1.5 text-text-100 focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="block text-slate-400 mb-1">Add model ID (optional)</label>
+              <label className="block text-text-400 mb-1">Add model ID (optional)</label>
               <div className="flex gap-2">
                 <input
                   value={newModelId}
                   onChange={e => setNewModelId(e.target.value)}
                   placeholder="e.g. gpt-4o"
-                  className="flex-1 rounded-lg border border-white/10 bg-slate-800 px-2 py-1.5 text-slate-100 focus:outline-none"
+                  className="flex-1 rounded-lg border border-border-200/40 bg-bg-200/60 px-2 py-1.5 text-text-100 focus:outline-none"
                 />
                 <button
                   onClick={() => {
@@ -148,7 +148,7 @@ export const ProviderSelectorPanel = memo(function ProviderSelectorPanel() {
                     }))
                     setNewModelId('')
                   }}
-                  className="rounded-lg px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 transition-colors"
+                  className="rounded-lg px-3 py-1.5 bg-bg-200/60 hover:bg-bg-200/80 text-text-200 transition-colors"
                 >
                   Add
                 </button>
@@ -156,7 +156,7 @@ export const ProviderSelectorPanel = memo(function ProviderSelectorPanel() {
               {newProvider.supportedModels && newProvider.supportedModels.length > 0 && (
                 <ul className="mt-1 space-y-0.5">
                   {newProvider.supportedModels.map((m: ProviderModelDescriptor) => (
-                    <li key={m.id} className="text-xs text-slate-300">• {m.id}</li>
+                    <li key={m.id} className="text-[length:var(--fs-xs)] text-text-400">• {m.id}</li>
                   ))}
                 </ul>
               )}
@@ -166,10 +166,10 @@ export const ProviderSelectorPanel = memo(function ProviderSelectorPanel() {
               onClick={handleAdd}
               disabled={!newProvider.id || !newProvider.name}
               className={clsx(
-                'rounded-lg px-4 py-1.5 font-medium transition-colors',
+                'rounded-lg px-4 py-1.5 font-medium transition-colors text-[length:var(--fs-xs)]',
                 newProvider.id && newProvider.name
-                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                  : 'bg-slate-700 text-slate-400 cursor-not-allowed',
+                  ? 'bg-accent-main-100 hover:bg-accent-main-200 text-bg-000'
+                  : 'bg-bg-200/40 text-text-500 cursor-not-allowed',
               )}
             >
               Save Provider
@@ -191,7 +191,7 @@ export const ProviderSelectorPanel = memo(function ProviderSelectorPanel() {
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-sm font-medium text-slate-100 truncate">{p.name}</span>
+                    <span className="text-[length:var(--fs-sm)] font-medium text-text-100 truncate">{p.name}</span>
                     <StatusBadge label={KIND_LABELS[p.kind]} tone="info" />
                     {!p.enabled && <StatusBadge label="Disabled" tone="neutral" />}
                     {isActive && <StatusBadge label="Active" tone="success" />}
@@ -201,8 +201,8 @@ export const ProviderSelectorPanel = memo(function ProviderSelectorPanel() {
                     <button
                       onClick={() => toggle(p.id, !p.enabled)}
                       className={clsx(
-                        'rounded-full px-2 py-0.5 text-xs font-medium transition-colors',
-                        p.enabled ? 'bg-slate-700 text-slate-200 hover:bg-rose-900/70' : 'bg-slate-800 text-slate-400 hover:bg-emerald-900/50',
+                      'rounded-full px-2 py-0.5 text-[length:var(--fs-xs)] font-medium transition-colors',
+                      p.enabled ? 'bg-bg-200/60 text-text-300 hover:bg-rose-500/20 hover:text-rose-300' : 'bg-bg-200/40 text-text-400 hover:bg-emerald-500/20 hover:text-emerald-300',
                       )}
                     >
                       {p.enabled ? 'Disable' : 'Enable'}
@@ -218,31 +218,31 @@ export const ProviderSelectorPanel = memo(function ProviderSelectorPanel() {
 
                 {p.supportedModels.length > 0 && (
                   <div className="space-y-1">
-                    <p className="text-xs text-slate-500">Models:</p>
+                    <p className="text-[length:var(--fs-xxs)] text-text-500">Models:</p>
                     <div className="flex flex-wrap gap-1.5">
                       {p.supportedModels.slice(0, 8).map((m: ProviderModelDescriptor) => (
                         <button
                           key={m.id}
                           onClick={() => select({ providerId: p.id, modelId: m.id })}
                           className={clsx(
-                            'rounded-full px-2.5 py-0.5 text-xs transition-colors',
-                            registry.activeSelection?.providerId === p.id && registry.activeSelection.modelId === m.id
-                              ? 'bg-emerald-600 text-white'
-                              : 'bg-slate-800 text-slate-300 hover:bg-slate-700',
+                          'rounded-full px-2.5 py-0.5 text-[length:var(--fs-xs)] transition-colors',
+                          registry.activeSelection?.providerId === p.id && registry.activeSelection.modelId === m.id
+                            ? 'bg-accent-main-100/20 text-accent-main-100'
+                            : 'bg-bg-200/50 text-text-300 hover:bg-bg-200/80',
                           )}
                         >
                           {m.label}
                         </button>
                       ))}
                       {p.supportedModels.length > 8 && (
-                        <span className="text-xs text-slate-500 self-center">+{p.supportedModels.length - 8} more</span>
+                        <span className="text-[length:var(--fs-xxs)] text-text-500 self-center">+{p.supportedModels.length - 8} more</span>
                       )}
                     </div>
                   </div>
                 )}
 
                 {p.baseUrl && (
-                  <p className="text-xs text-slate-500 truncate">{p.baseUrl}</p>
+                  <p className="text-[length:var(--fs-xxs)] text-text-500 truncate">{p.baseUrl}</p>
                 )}
               </li>
             )
