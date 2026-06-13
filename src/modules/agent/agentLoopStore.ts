@@ -15,6 +15,7 @@ import { sendMessageAsyncWithFallback } from '../fallback'
 
 const STORAGE_KEY_CHECKPOINT = 'oca-agent-checkpoint-v1'
 const MAX_LOG_LINES = 500
+const WAIT_FATAL_PREFIX = '__agent_wait_fatal__:'
 
 function getActiveModel(): { providerID: string; modelID: string } {
   const provider = providerRegistryStore.getActiveProvider()
@@ -233,28 +234,57 @@ class AgentLoopStore {
   // -------------------------------------------------------
   private async waitForResponse(sessionId: string, pollMs = 800, timeoutMs = 120000): Promise<string> {
     const deadline = Date.now() + timeoutMs
-    let lastCount = 0
+    const initialMessages = await getSessionMessages(sessionId)
+    const seenAssistantIds = new Set(
+      initialMessages
+        .filter(message => isAssistantMessage(message.info))
+        .map(message => message.info.id),
+    )
+    let pendingAssistantId: string | null = null
 
     while (Date.now() < deadline) {
       if (this.abortController?.signal.aborted) throw new Error('Agent loop aborted')
       await sleep(pollMs)
       try {
         const messages = await getSessionMessages(sessionId)
-        if (messages.length !== lastCount) {
-          lastCount = messages.length
-          // Wait one more cycle to ensure streaming is done
-          await sleep(pollMs)
-          const refreshed = await getSessionMessages(sessionId)
-          if (refreshed.length === lastCount) {
-            // Find last assistant message
-            const last = [...refreshed].reverse().find(m => m.info.role === 'assistant')
-            if (last) {
-              // Extract text from parts
-              return extractTextFromMessage(last)
-            }
+
+        if (!pendingAssistantId) {
+          const latestAssistant = [...messages]
+            .reverse()
+            .find(message => isAssistantMessage(message.info) && !seenAssistantIds.has(message.info.id))
+          if (latestAssistant && isAssistantMessage(latestAssistant.info)) {
+            pendingAssistantId = latestAssistant.info.id
           }
         }
-      } catch {
+
+        if (!pendingAssistantId) {
+          continue
+        }
+
+        const pendingAssistant = messages.find(
+          message => isAssistantMessage(message.info) && message.info.id === pendingAssistantId,
+        )
+        if (!pendingAssistant || !isAssistantMessage(pendingAssistant.info)) {
+          continue
+        }
+
+        const assistantError = extractAssistantErrorMessage(pendingAssistant.info)
+        if (assistantError) {
+          throw new Error(`${WAIT_FATAL_PREFIX}${assistantError}`)
+        }
+
+        const text = extractTextFromMessage(pendingAssistant).trim()
+        if (text.length > 0) {
+          return text
+        }
+
+        if (pendingAssistant.info.time.completed) {
+          throw new Error(`${WAIT_FATAL_PREFIX}Assistant response completed with no text output`)
+        }
+      } catch (error) {
+        if (error instanceof Error && error.message.startsWith(WAIT_FATAL_PREFIX)) {
+          throw new Error(error.message.slice(WAIT_FATAL_PREFIX.length))
+        }
         // transient error — keep polling
       }
     }
@@ -402,6 +432,30 @@ function extractTextFromMessage(msg: { info: unknown; parts?: unknown[] }): stri
     )
     .map(p => p.text ?? '')
     .join('\n')
+}
+
+function isAssistantMessage(info: unknown): info is { role: 'assistant'; id: string; time: { completed?: number }; error?: unknown } {
+  return (
+    typeof info === 'object' &&
+    info !== null &&
+    (info as { role?: unknown }).role === 'assistant' &&
+    typeof (info as { id?: unknown }).id === 'string'
+  )
+}
+
+function extractAssistantErrorMessage(info: { error?: unknown }): string | null {
+  if (!info.error || typeof info.error !== 'object') return null
+
+  const err = info.error as {
+    name?: string
+    data?: {
+      message?: string
+    }
+  }
+
+  const name = err.name ?? 'AssistantError'
+  const message = err.data?.message?.trim()
+  return message ? `${name}: ${message}` : name
 }
 
 export const agentLoopStore = new AgentLoopStore()

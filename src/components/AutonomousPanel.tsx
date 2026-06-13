@@ -52,7 +52,7 @@ export const AutonomousPanel = memo(function AutonomousPanel({ directory, classN
   const [activeTab, setActiveTab] = useState<TabId>('hardware')
 
   return (
-    <div className={clsx('flex flex-col bg-bg-000 text-text-100 h-full', className)}>
+    <div className={clsx('flex min-h-0 flex-col bg-bg-000 text-text-100 h-full', className)}>
       {/* Tab bar */}
       <div className="flex items-center border-b border-border-200/50 px-2 shrink-0 overflow-x-auto">
         {TABS.map(tab => (
@@ -72,7 +72,7 @@ export const AutonomousPanel = memo(function AutonomousPanel({ directory, classN
       </div>
 
       {/* Panel body */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
         <Suspense fallback={<PanelFallback />}>
           {activeTab === 'hardware' && <HardwareScanPanel />}
           {activeTab === 'providers' && <ProviderSelectorPanel />}
