@@ -294,7 +294,7 @@ function ConfigEditorDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () 
               </>
             ) : (
               <div className="grid min-h-0 flex-1 grid-cols-[200px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)]">
-                <aside className="min-w-0 border-r border-border-200/50 p-2">
+                <aside className="min-h-0 min-w-0 overflow-y-auto scrollbar-none border-r border-border-200/50 p-2">
                   <div className="space-y-0.5">
                     {SECTION_IDS.map(id => (
                       <button
