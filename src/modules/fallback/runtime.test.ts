@@ -10,6 +10,16 @@ vi.mock('../../providers', () => ({
   providerRegistryStore: {
     getSnapshot: () => ({
       providers: [
+        {
+          id: 'openrouter',
+          name: 'OpenRouter',
+          enabled: false,
+          priority: 5,
+          supportedModels: [
+            { id: 'openai/gpt-4o-mini' },
+            { id: 'google/gemma-4-31b-it:free' },
+          ],
+        },
         { id: 'p1', name: 'Provider 1', enabled: true, priority: 10, supportedModels: [{ id: 'model-a' }] },
         { id: 'p2', name: 'Provider 2', enabled: true, priority: 20, supportedModels: [{ id: 'model-a' }] },
       ],
@@ -61,5 +71,56 @@ describe('sendMessageAsyncWithFallback', () => {
     expect(result.providerID).toBe('p2')
     expect(sendMessageAsyncMock).toHaveBeenCalledTimes(2)
     expect(fallbackEngineStore.getSnapshot().activeEndpointId).toBe('p2')
+  })
+
+  it('replaces flaky OpenRouter model with safer fallback before sending', async () => {
+    sendMessageAsyncMock.mockResolvedValueOnce(undefined)
+
+    await sendMessageAsyncWithFallback({
+      sessionId: 's1',
+      text: 'hello',
+      attachments: [],
+      model: { providerID: 'openrouter', modelID: 'google/gemma-4-31b-it:free' },
+    })
+
+    expect(sendMessageAsyncMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: expect.objectContaining({ modelID: 'openai/gpt-4o-mini' }),
+      }),
+    )
+  })
+
+  it('sanitizes stale fallback-chain endpoints that still point at flaky OpenRouter model', async () => {
+    sendMessageAsyncMock.mockResolvedValueOnce(undefined)
+
+    fallbackEngineStore.setChain([
+      {
+        id: 'openrouter',
+        provider: 'OpenRouter',
+        model: 'google/gemma-4-31b-it:free',
+        priority: 10,
+        enabled: true,
+      },
+      {
+        id: 'p2',
+        provider: 'Provider 2',
+        model: 'model-a',
+        priority: 20,
+        enabled: true,
+      },
+    ], false)
+
+    await sendMessageAsyncWithFallback({
+      sessionId: 's1',
+      text: 'hello',
+      attachments: [],
+      model: { providerID: 'openrouter', modelID: 'google/gemma-4-31b-it:free' },
+    })
+
+    expect(sendMessageAsyncMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: { providerID: 'openrouter', modelID: 'openai/gpt-4o-mini' },
+      }),
+    )
   })
 })

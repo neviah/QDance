@@ -32,6 +32,20 @@ interface UseModelSelectionReturn {
   ) => void
 }
 
+const RATE_LIMITED_DEFAULT_MODEL_KEY = 'openrouter:google/gemma-4-31b-it:free'
+const SAFER_OPENROUTER_FALLBACK_KEYS = [
+  'openrouter:openai/gpt-4o-mini',
+  'openrouter:anthropic/claude-3.5-haiku',
+  'openrouter:deepseek/deepseek-chat',
+]
+
+function getSaferFallbackModelKey(models: ModelInfo[]): string | null {
+  for (const key of SAFER_OPENROUTER_FALLBACK_KEYS) {
+    if (findModelByKey(models, key)) return key
+  }
+  return null
+}
+
 export function useModelSelection({ models, sessionId = null }: UseModelSelectionOptions): UseModelSelectionReturn {
   const sessionSelection = sessionId ? getSessionModelSelection(sessionId) : undefined
   const initialSessionSelection = sessionId ? getSessionModelSelection(sessionId) : undefined
@@ -59,7 +73,12 @@ export function useModelSelection({ models, sessionId = null }: UseModelSelectio
   const skipPersistenceRef = useRef<string | null>(null)
 
   const persistedModel = selectedModelKey ? findModelByKey(models, selectedModelKey) : undefined
-  const currentModel = useMemo(() => persistedModel ?? models[0], [models, persistedModel])
+  const saferFallbackModel = useMemo(() => {
+    if (selectedModelKey !== RATE_LIMITED_DEFAULT_MODEL_KEY) return undefined
+    const fallbackKey = getSaferFallbackModelKey(models)
+    return fallbackKey ? findModelByKey(models, fallbackKey) : undefined
+  }, [models, selectedModelKey])
+  const currentModel = useMemo(() => saferFallbackModel ?? persistedModel ?? models[0], [models, persistedModel, saferFallbackModel])
   const resolvedModelKey = currentModel ? getModelKey(currentModel) : null
   const resolvedSelectedVariant = useMemo(() => {
     if (!resolvedModelKey) return undefined

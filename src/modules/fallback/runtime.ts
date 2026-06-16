@@ -4,6 +4,18 @@ import { fallbackEngineStore } from './fallbackStore'
 
 type FallbackReason = 'error' | 'rate_limit' | 'timeout'
 
+const OPENROUTER_PROVIDER_ID = 'openrouter'
+const RATE_LIMITED_OPENROUTER_MODEL_ID = 'google/gemma-4-31b-it:free'
+const SAFER_OPENROUTER_MODEL_IDS = [
+  'openai/gpt-4o-mini',
+  'anthropic/claude-3.5-haiku',
+  'deepseek/deepseek-chat',
+]
+
+function isRateLimitedOpenRouterSelection(providerId: string, modelId: string): boolean {
+  return providerId === OPENROUTER_PROVIDER_ID && modelId === RATE_LIMITED_OPENROUTER_MODEL_ID
+}
+
 function classifyFailureReason(error: unknown): FallbackReason | null {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
   if (message.includes('aborted') || message.includes('cancelled') || message.includes('canceled')) return null
@@ -16,13 +28,40 @@ function classifyFailureReason(error: unknown): FallbackReason | null {
 function resolveModelForProvider(providerId: string, preferredModelId: string): string {
   const provider = providerRegistryStore.getSnapshot().providers.find(p => p.id === providerId)
   if (!provider) return preferredModelId
+
+  if (isRateLimitedOpenRouterSelection(providerId, preferredModelId)) {
+    for (const safeModelId of SAFER_OPENROUTER_MODEL_IDS) {
+      if (provider.supportedModels.some(model => model.id === safeModelId)) {
+        return safeModelId
+      }
+    }
+  }
+
   if (provider.supportedModels.some(model => model.id === preferredModelId)) return preferredModelId
   return provider.supportedModels[0]?.id ?? preferredModelId
 }
 
 function syncFallbackChain(activeModelId: string) {
   const existing = fallbackEngineStore.getSnapshot()
-  if (existing.endpoints.length > 0) return
+  if (existing.endpoints.length > 0) {
+    const sanitizedEndpoints = existing.endpoints.map(endpoint => {
+      const preferredModelId = endpoint.model || activeModelId
+      if (!isRateLimitedOpenRouterSelection(endpoint.id, preferredModelId)) return endpoint
+
+      const safeModelId = resolveModelForProvider(endpoint.id, preferredModelId)
+      if (safeModelId === endpoint.model) return endpoint
+      return {
+        ...endpoint,
+        model: safeModelId,
+      }
+    })
+
+    const changed = sanitizedEndpoints.some((endpoint, index) => endpoint.model !== existing.endpoints[index]?.model)
+    if (changed) {
+      fallbackEngineStore.setChain(sanitizedEndpoints, false)
+    }
+    return
+  }
 
   const providers = providerRegistryStore
     .getSnapshot()
@@ -34,7 +73,10 @@ function syncFallbackChain(activeModelId: string) {
       priority: provider.priority,
     }))
 
-  fallbackEngineStore.syncFromProviders(providers, activeModelId, false)
+  const safeActiveModelId = isRateLimitedOpenRouterSelection(OPENROUTER_PROVIDER_ID, activeModelId)
+    ? resolveModelForProvider(OPENROUTER_PROVIDER_ID, activeModelId)
+    : activeModelId
+  fallbackEngineStore.syncFromProviders(providers, safeActiveModelId, false)
 }
 
 export async function sendMessageAsyncWithFallback(

@@ -10,6 +10,7 @@ import { useProviderRegistry, useProviderRegistryActions } from '../providers'
 import type { ProviderDefinition, ProviderKind, ProviderModelDescriptor } from '../providers'
 import { ModuleCard } from '../ui/components/ModuleCard'
 import { StatusBadge } from '../ui/components/StatusBadge'
+import { getGlobalConfig, updateGlobalConfig } from '../api'
 
 const KIND_LABELS: Record<ProviderKind, string> = {
   openrouter: 'OpenRouter',
@@ -25,6 +26,9 @@ export const ProviderSelectorPanel = memo(function ProviderSelectorPanel() {
   const { register, remove, toggle, select } = useProviderRegistryActions()
 
   const [showAddForm, setShowAddForm] = useState(false)
+  const [openRouterApiKey, setOpenRouterApiKey] = useState('')
+  const [quickSetupStatus, setQuickSetupStatus] = useState<'idle' | 'saving' | 'done' | 'error'>('idle')
+  const [quickSetupMessage, setQuickSetupMessage] = useState('')
   const [newProvider, setNewProvider] = useState<Partial<ProviderDefinition>>({
     kind: 'openai',
     enabled: true,
@@ -49,8 +53,137 @@ export const ProviderSelectorPanel = memo(function ProviderSelectorPanel() {
     setNewProvider({ kind: 'openai', enabled: true, priority: 50, supportedModels: [] })
   }
 
+  const applyOpenRouterKey = async () => {
+    const key = openRouterApiKey.trim()
+    if (!key) {
+      setQuickSetupStatus('error')
+      setQuickSetupMessage('Paste your OpenRouter key first.')
+      return
+    }
+
+    setQuickSetupStatus('saving')
+    setQuickSetupMessage('Saving key to global config...')
+    try {
+      const current = await getGlobalConfig()
+      const provider = (current.provider && typeof current.provider === 'object') ? current.provider : {}
+      const providerEntries = Object.entries(provider)
+      const normalizedProvider: Record<string, unknown> = { ...provider }
+
+      for (const [providerName, providerValue] of providerEntries) {
+        if (!providerValue || typeof providerValue !== 'object' || Array.isArray(providerValue)) continue
+
+        const providerRecord = providerValue as Record<string, unknown>
+        const providerId = typeof providerRecord.id === 'string' ? providerRecord.id.toLowerCase() : ''
+        const nameMatch = providerName.toLowerCase() === 'openrouter'
+        const idMatch = providerId === 'openrouter'
+        if (!nameMatch && !idMatch) continue
+
+        const existingOptions = (providerRecord.options && typeof providerRecord.options === 'object' && !Array.isArray(providerRecord.options))
+          ? providerRecord.options as Record<string, unknown>
+          : {}
+
+        const nextOptions: Record<string, unknown> = {
+          ...existingOptions,
+          apiKey: key,
+        }
+
+        // Some user-created aliases accidentally set a completions endpoint as base URL.
+        // Normalize to provider root so SDK appends the path correctly.
+        if (typeof nextOptions.baseURL === 'string' && nextOptions.baseURL.endsWith('/chat/completions')) {
+          nextOptions.baseURL = 'https://openrouter.ai/api/v1'
+        }
+
+        normalizedProvider[providerName] = {
+          ...providerRecord,
+          options: nextOptions,
+        }
+      }
+
+      const canonicalOpenRouter = (normalizedProvider.openrouter && typeof normalizedProvider.openrouter === 'object' && !Array.isArray(normalizedProvider.openrouter))
+        ? normalizedProvider.openrouter as Record<string, unknown>
+        : {}
+      const canonicalOptions = (canonicalOpenRouter.options && typeof canonicalOpenRouter.options === 'object' && !Array.isArray(canonicalOpenRouter.options))
+        ? canonicalOpenRouter.options as Record<string, unknown>
+        : {}
+
+      normalizedProvider.openrouter = {
+        ...canonicalOpenRouter,
+        options: {
+          ...canonicalOptions,
+          apiKey: key,
+        },
+      }
+
+      await updateGlobalConfig({
+        ...current,
+        provider: {
+          ...normalizedProvider,
+        } as Exclude<typeof current.provider, undefined>,
+      })
+
+      const openRouterProvider = registry.providers.find(p => p.id === 'openrouter')
+      const fallbackModel = openRouterProvider?.supportedModels.find(m => m.id === 'openai/gpt-4o-mini') ?? openRouterProvider?.supportedModels[0]
+      if (openRouterProvider && fallbackModel) {
+        select({ providerId: openRouterProvider.id, modelId: fallbackModel.id })
+      }
+
+      setQuickSetupStatus('done')
+      setQuickSetupMessage('Saved. OpenRouter is now configured. Try sending a message.')
+    } catch (error) {
+      setQuickSetupStatus('error')
+      setQuickSetupMessage(error instanceof Error ? error.message : 'Failed to save OpenRouter key.')
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4 p-4 overflow-y-auto">
+      <ModuleCard
+        title="Quick OpenRouter Setup"
+        description="Paste your key here and click Apply. This saves to global config so chat uses it directly."
+      >
+        <div className="space-y-2 rounded-xl border border-border-200/40 bg-bg-000/75 p-3">
+          <label className="block text-[length:var(--fs-xs)] text-text-400">OpenRouter API key</label>
+          <input
+            value={openRouterApiKey}
+            onChange={e => {
+              setOpenRouterApiKey(e.target.value)
+              if (quickSetupStatus !== 'idle') {
+                setQuickSetupStatus('idle')
+                setQuickSetupMessage('')
+              }
+            }}
+            type="password"
+            placeholder="sk-or-v1-..."
+            className="w-full rounded-lg border border-border-200/40 bg-bg-200/60 px-2.5 py-2 text-[length:var(--fs-sm)] text-text-100 focus:outline-none"
+          />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => void applyOpenRouterKey()}
+              disabled={quickSetupStatus === 'saving'}
+              className={clsx(
+                'rounded-lg px-3 py-1.5 text-[length:var(--fs-xs)] font-medium transition-colors',
+                quickSetupStatus === 'saving'
+                  ? 'bg-bg-200/50 text-text-500 cursor-wait'
+                  : 'bg-accent-main-100 hover:bg-accent-main-200 text-bg-000',
+              )}
+            >
+              {quickSetupStatus === 'saving' ? 'Applying...' : 'Apply Key'}
+            </button>
+            <span className="text-[length:var(--fs-xxs)] text-text-500">No restart should be needed after this.</span>
+          </div>
+          {quickSetupMessage && (
+            <div
+              className={clsx(
+                'text-[length:var(--fs-xs)]',
+                quickSetupStatus === 'done' ? 'text-emerald-300' : quickSetupStatus === 'error' ? 'text-rose-300' : 'text-text-400',
+              )}
+            >
+              {quickSetupMessage}
+            </div>
+          )}
+        </div>
+      </ModuleCard>
+
       <ModuleCard
         title="Providers & Models"
         description="Configure cloud and local inference providers. The active provider is used by the agent loop."
