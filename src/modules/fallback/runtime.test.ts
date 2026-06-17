@@ -17,6 +17,7 @@ vi.mock('../../providers', () => ({
           priority: 5,
           supportedModels: [
             { id: 'openai/gpt-4o-mini' },
+            { id: 'qwen/qwen3-coder:free' },
             { id: 'google/gemma-4-31b-it:free' },
           ],
         },
@@ -118,6 +119,49 @@ describe('sendMessageAsyncWithFallback', () => {
     })
 
     expect(sendMessageAsyncMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: { providerID: 'openrouter', modelID: 'openai/gpt-4o-mini' },
+      }),
+    )
+  })
+
+  it('retries with a safer OpenRouter model when the current model is deprecated', async () => {
+    sendMessageAsyncMock
+      .mockRejectedValueOnce(new Error('[Venice] The model `qwen3-coder-480b-a35b-instruct` has been deprecated. Please use `qwen3-coder-480b-a35b-instruct-turbo` instead.'))
+      .mockResolvedValueOnce(undefined)
+
+    fallbackEngineStore.setChain([
+      {
+        id: 'openrouter',
+        provider: 'OpenRouter',
+        model: 'qwen/qwen3-coder:free',
+        priority: 10,
+        enabled: true,
+      },
+      {
+        id: 'p1',
+        provider: 'Provider 1',
+        model: 'model-a',
+        priority: 20,
+        enabled: true,
+      },
+    ], false)
+
+    await sendMessageAsyncWithFallback({
+      sessionId: 's1',
+      text: 'hello',
+      attachments: [],
+      model: { providerID: 'openrouter', modelID: 'qwen/qwen3-coder:free' },
+    })
+
+    expect(sendMessageAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        model: { providerID: 'openrouter', modelID: 'qwen/qwen3-coder:free' },
+      }),
+    )
+    expect(sendMessageAsyncMock).toHaveBeenNthCalledWith(
+      2,
       expect.objectContaining({
         model: { providerID: 'openrouter', modelID: 'openai/gpt-4o-mini' },
       }),

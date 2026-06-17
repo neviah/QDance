@@ -11,6 +11,9 @@ const SAFER_OPENROUTER_MODEL_IDS = [
   'anthropic/claude-3.5-haiku',
   'deepseek/deepseek-chat',
 ]
+const DEPRECATED_OPENROUTER_MODEL_IDS = [
+  'qwen/qwen3-coder:free',
+]
 
 function isRateLimitedOpenRouterSelection(providerId: string, modelId: string): boolean {
   return providerId === OPENROUTER_PROVIDER_ID && modelId === RATE_LIMITED_OPENROUTER_MODEL_ID
@@ -23,6 +26,32 @@ function classifyFailureReason(error: unknown): FallbackReason | null {
   if (message.includes('429') || message.includes('rate') || message.includes('quota')) return 'rate_limit'
   if (message.includes('timeout') || message.includes('timed out') || message.includes('deadline')) return 'timeout'
   return 'error'
+}
+
+function isModelDeprecatedError(message: string): boolean {
+  const normalized = message.toLowerCase()
+  return normalized.includes('deprecated') || normalized.includes('please use')
+}
+
+function resolveSameProviderModelFallback(providerId: string, modelId: string, errorMessage: string): string | null {
+  if (providerId !== OPENROUTER_PROVIDER_ID) return null
+
+  const provider = providerRegistryStore.getSnapshot().providers.find(p => p.id === providerId)
+  if (!provider) return null
+
+  const shouldFallback = isRateLimitedOpenRouterSelection(providerId, modelId)
+    || (DEPRECATED_OPENROUTER_MODEL_IDS.includes(modelId) && isModelDeprecatedError(errorMessage))
+
+  if (!shouldFallback) return null
+
+  for (const safeModelId of SAFER_OPENROUTER_MODEL_IDS) {
+    if (safeModelId === modelId) continue
+    if (provider.supportedModels.some(model => model.id === safeModelId)) {
+      return safeModelId
+    }
+  }
+
+  return null
 }
 
 function resolveModelForProvider(providerId: string, preferredModelId: string): string {
@@ -89,9 +118,13 @@ export async function sendMessageAsyncWithFallback(
   let providerID = activeEndpoint?.id ?? params.model.providerID
   let modelID = activeEndpoint?.model || resolveModelForProvider(providerID, params.model.modelID)
   const attemptedProviderIds = new Set<string>()
+  const attemptedTargets = new Set<string>()
   let lastError: unknown
 
-  while (!attemptedProviderIds.has(providerID)) {
+  while (true) {
+    const targetKey = `${providerID}:${modelID}`
+    if (attemptedTargets.has(targetKey)) break
+    attemptedTargets.add(targetKey)
     attemptedProviderIds.add(providerID)
 
     try {
@@ -116,9 +149,19 @@ export async function sendMessageAsyncWithFallback(
         throw error instanceof Error ? error : new Error(message)
       }
 
+      const sameProviderModelFallback = resolveSameProviderModelFallback(providerID, modelID, message)
+      if (sameProviderModelFallback && !attemptedTargets.has(`${providerID}:${sameProviderModelFallback}`)) {
+        modelID = sameProviderModelFallback
+        continue
+      }
+
       const resolution = fallbackEngineStore.recordFailure(providerID, reason, message)
 
       if (!resolution) {
+        break
+      }
+
+      if (attemptedProviderIds.has(resolution.endpoint.id)) {
         break
       }
 
